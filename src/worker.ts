@@ -9,9 +9,11 @@ import { createHealthApp } from "./health.js";
 import { createPrismaClient } from "./db.js";
 import { ensureQueueFoundation, ensureQueueSchedules } from "./queue.js";
 import { installScheduledJobHandlers } from "./jobs.js";
+import { InMemoryMetricsStore } from "./metrics.js";
 
 export async function startWorker(): Promise<void> {
   const config = loadConfig();
+  const metrics = new InMemoryMetricsStore();
   const pool = new Pool({
     connectionString: config.DATABASE_URL,
     connectionTimeoutMillis: 2_000,
@@ -38,6 +40,7 @@ export async function startWorker(): Promise<void> {
   await ensureQueueSchedules(boss);
   const prisma = createPrismaClient(config.DATABASE_URL);
   await installScheduledJobHandlers(boss, prisma);
+  metrics.gauge("queue.started", 1);
 
   const app = createHealthApp({
     corsOrigin: config.CORS_ORIGIN,

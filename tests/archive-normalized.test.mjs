@@ -11,10 +11,9 @@ const sourceHash = "a".repeat(64);
 
 function envelope(overrides = {}) {
   const publicPayload = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     spotId: "unit_spot_001",
     spotVersionId: "unit_spot_001_v1",
-    mode: "single_hand",
     publicationDate: "2026-08-19",
     slotOrder: 1,
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
@@ -25,9 +24,11 @@ function envelope(overrides = {}) {
       { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false },
     ],
     featuredCombo: "AhAs",
+    selectableCombos: [{ combo: "AhAs", category: "pair" }],
+    presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceHash,
     publicPayload,
     privateSolutionPayload: {

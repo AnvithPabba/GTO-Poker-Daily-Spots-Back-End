@@ -32,7 +32,11 @@ export function createHealthApp({ pool, service, corsOrigin }: HealthOptions): E
   const app = express();
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("Referrer-Policy", "same-origin");
+    response.setHeader("X-Frame-Options", "DENY");
     response.setHeader("Access-Control-Allow-Origin", corsOrigin);
+    response.setHeader("Access-Control-Allow-Credentials", "true");
     response.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
     response.setHeader("Access-Control-Allow-Headers", "Content-Type");
     next();

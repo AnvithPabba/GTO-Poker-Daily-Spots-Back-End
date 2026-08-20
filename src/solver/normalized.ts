@@ -26,7 +26,7 @@ export const candidateManifestSchema = z.object({
 }).strict();
 
 export const normalizedEnvelopeSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   publicPayload: publicSpotSchema,
   privateSolutionPayload: privateSolutionPayloadSchema,
@@ -74,7 +74,7 @@ export function validateNormalizedEnvelope(input: unknown): NormalizedEnvelope {
   if (envelope.candidateManifest.sourceHash !== envelope.sourceHash) throw new Error("candidate manifest source hash mismatch");
   const publicActionIds = envelope.publicPayload.legalActions.map((action) => action.id);
   if (JSON.stringify(publicActionIds) !== JSON.stringify(envelope.privateSolutionPayload.actionOrder)) throw new Error("public/private action order mismatch");
-  const selectable = new Set(envelope.publicPayload.mode === "single_hand" ? (envelope.publicPayload.featuredCombo ? [envelope.publicPayload.featuredCombo] : []) : (envelope.publicPayload.selectableCombos ?? []).map((entry) => entry.combo));
+  const selectable = new Set(envelope.publicPayload.selectableCombos.map((entry) => entry.combo));
   for (const combo of selectable) {
     const strategy = envelope.privateSolutionPayload.byCombo[combo];
     if (!strategy) throw new Error(`missing private strategy for selectable combo ${combo}`);

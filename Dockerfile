@@ -8,6 +8,10 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /workspace
 ENV CI=true
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY contracts/package.json contracts/pnpm-lock.yaml ./contracts/
@@ -27,6 +31,10 @@ FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /workspace
 ENV NODE_ENV=production
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 

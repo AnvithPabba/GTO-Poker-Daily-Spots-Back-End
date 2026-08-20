@@ -15,7 +15,7 @@ test("database publication lifecycle is guarded and Pacific-date coverage counts
     await prisma.solverTemplate.create({ data: { id: ids.template, familyId: suffix, version: 1, name: "publication test", config: { pot: 50, effective_stack: 100, board: ["Qs", "Jh", "2h"], ranges: { ip: "AA", oop: "KK" } }, updatedAt: new Date() } });
     await prisma.solverJob.create({ data: { id: ids.job, templateId: ids.template, effectiveSeed: suffix, updatedAt: new Date() } });
     await prisma.solverRun.create({ data: { id: ids.run, jobId: ids.job, attemptNumber: 1, status: "SUCCEEDED", resolvedInput: {}, sourceHash: "e".repeat(64), outputSha256: `${suffix}_output` } });
-    await prisma.spot.create({ data: { id: ids.spot, mode: "SINGLE_HAND", title: "publication test", updatedAt: new Date() } });
+    await prisma.spot.create({ data: { id: ids.spot, title: "publication test", updatedAt: new Date() } });
     await prisma.spotVersion.create({ data: { id: ids.version, spotId: ids.spot, version: 1, solverRunId: ids.run, candidateManifest: {}, publicPayload: {}, privateSolutionPayload: {}, normalizerVersion: "1", selectionRankingVersion: "1", publicPayloadSha256: `${suffix}_public`, privatePayloadSha256: `${suffix}_private`, status: "VALIDATED", validatedAt: new Date() } });
     await approveSpotVersion(prisma, ids.version);
     assert.equal(await countFutureCoverage(prisma, pacificDate()), 1);

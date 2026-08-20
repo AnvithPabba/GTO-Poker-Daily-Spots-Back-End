@@ -13,12 +13,38 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm test:unit
+pnpm test:load
 ```
 
 The backend consumes `@poker-trainer/contracts` from the sibling checkout
 while the repositories are developed locally. Before deployment, pin an exact
 published contracts version and do not expose private solution modules to the
 frontend.
+
+## Layers and injected boundaries
+
+HTTP routes validate and authorize requests, then call focused domain or
+infrastructure modules. `src/ports.ts` defines `SpotRepository`,
+`IdentityProvider`, `ArchiveStore`, `CacheStore`, and `Clock`; in-memory fakes
+are used by unit tests while Prisma/filesystem/provider adapters are used by
+runtime composition. `src/errors.ts` provides typed application errors and
+`src/oidc.ts` keeps bearer verification provider-neutral.
+
+The composition root also wires a process-local metrics port and a loopback
+admin audit trail. Production can replace those adapters with
+Prometheus/OpenTelemetry, object storage, or a trusted OIDC verifier without
+changing the public route contracts.
+
+```mermaid
+flowchart TD
+    HTTP[Express routes] --> UseCases[Application operations]
+    UseCases --> Domain[Scoring / publication rules]
+    Domain --> Ports[Repository / archive / cache / identity ports]
+    Ports --> PG[Prisma + PostgreSQL]
+    Ports --> Archive[Filesystem or object archive]
+    Ports --> Cache[No-op / memory / CDN cache]
+```
 
 ## Runtime processes
 
@@ -52,6 +78,17 @@ Liveness is process-only. Readiness executes `SELECT 1` and returns `503`
 when PostgreSQL is unavailable. Pool and pg-boss errors are handled so a
 transient database outage does not kill either health server. SIGTERM/SIGINT
 close the HTTP server, queue connection, and PostgreSQL pool gracefully.
+
+The deterministic load smoke test exercises a health or read endpoint without
+external services:
+
+```bash
+pnpm test:load
+LOAD_PATH=/api/v1/spots/today LOAD_REQUESTS=500 LOAD_CONCURRENCY=25 pnpm test:load
+```
+
+It reports throughput and fails on any non-2xx response; it is a baseline, not
+a substitute for a production capacity test.
 
 ## Docker and host-worker boundary
 
@@ -94,3 +131,14 @@ corepack pnpm spot:manage -- publish ...
 private Solver selector, converts it to the versioned application envelope,
 and stores public and private JSON in separate `SpotVersion` columns. It does
 not publish automatically.
+
+## Accounts and local administration
+
+`GET /api/v1/auth/me` and `GET /api/v1/auth/history` use the injected
+provider-neutral bearer verifier when one is configured. Account attempts use
+their own idempotency and official-attempt constraints; they are never merged
+with an opaque guest-cookie history. The local admin surface is loopback-only:
+`/api/v1/admin/calendar`, `/metrics`, `/audit`, guarded job retry/hold/cancel,
+and version approve/schedule/hold operations are available for local
+development. Mutations append an `AdminAudit` row and do not expose private
+frequency values.

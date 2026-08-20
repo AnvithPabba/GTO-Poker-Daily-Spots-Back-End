@@ -29,11 +29,6 @@ enum SolverRunStatus {
   FAILED
 }
 
-enum SpotMode {
-  SINGLE_HAND
-  MULTI_HAND
-}
-
 enum SpotStatus {
   DRAFT
   APPROVED
@@ -148,7 +143,6 @@ model SolverRun {
 
 model Spot {
   id               String     @id @default(cuid())
-  mode             SpotMode
   title            String
   description      String?
   tags             Json?
@@ -172,7 +166,7 @@ model SpotVersion {
   candidateManifest       Json
   publicPayload           Json
   privateSolutionPayload  Json
-  schemaVersion           Int               @default(1)
+  schemaVersion           Int               @default(2)
   normalizerVersion       String
   selectionRankingVersion String
   publicPayloadSha256     String
@@ -231,9 +225,21 @@ model GuestSession {
   @@index([expiresAt, revokedAt])
 }
 
+model Account {
+  id        String   @id @default(cuid())
+  subject   String   @unique
+  email     String?
+  roles     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attempts Attempt[]
+}
+
 model Attempt {
   id                String   @id @default(cuid())
-  guestSessionId    String
+  guestSessionId    String?
+  accountId         String?
   spotId            String
   spotVersionId     String
   official          Boolean  @default(false)
@@ -249,12 +255,27 @@ model Attempt {
   createdAt         DateTime @default(now())
   requestMetadata   Json?
 
-  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
-  spot         Spot         @relation(fields: [spotId], references: [id], onDelete: Restrict)
-  spotVersion  SpotVersion  @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
+  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  spot         Spot          @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  spotVersion  SpotVersion   @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
 
   @@unique([guestSessionId, spotVersionId, idempotencyKey])
+  @@unique([accountId, spotVersionId, idempotencyKey])
   @@index([guestSessionId, createdAt])
+  @@index([accountId, createdAt])
   @@index([spotVersionId, createdAt])
   @@index([spotId, createdAt])
+}
+
+model AdminAudit {
+  id          String   @id @default(cuid())
+  actor       String?
+  operation   String
+  targetId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([targetId, createdAt])
+  @@index([operation, createdAt])
 }

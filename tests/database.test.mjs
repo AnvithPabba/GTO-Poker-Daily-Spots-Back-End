@@ -11,13 +11,13 @@ test("database schema, roles, immutability, and singleton constraints", { skip: 
   const ids = {
     template: `${suffix}_template`, job: `${suffix}_job`, run: `${suffix}_run`, spot: `${suffix}_spot`, version: `${suffix}_version`, guest: `${suffix}_guest`, attempt: `${suffix}_attempt`,
   };
-  const publicPayload = JSON.stringify({ schemaVersion: 1, spotId: ids.spot, spotVersionId: ids.version });
+  const publicPayload = JSON.stringify({ schemaVersion: 2, spotId: ids.spot, spotVersionId: ids.version });
   try {
     await client.query("BEGIN");
     await client.query(`INSERT INTO "SolverTemplate" (id, "familyId", version, name, config, "updatedAt") VALUES ($1, $2, 1, 'database test', $3::jsonb, now())`, [ids.template, suffix, '{"pot":50,"effective_stack":100,"board":["Qs","Jh","2h"],"ranges":{"ip":"AA","oop":"KK"}}']);
     await client.query(`INSERT INTO "SolverJob" (id, "templateId", "effectiveSeed", "updatedAt") VALUES ($1, $2, 'seed', now())`, [ids.job, ids.template]);
     await client.query(`INSERT INTO "SolverRun" (id, "jobId", "attemptNumber", status, "resolvedInput") VALUES ($1, $2, 1, 'SUCCEEDED', '{}'::jsonb)`, [ids.run, ids.job]);
-    await client.query(`INSERT INTO "Spot" (id, mode, title, "updatedAt") VALUES ($1, 'SINGLE_HAND', 'database test', now())`, [ids.spot]);
+    await client.query(`INSERT INTO "Spot" (id, title, "updatedAt") VALUES ($1, 'database test', now())`, [ids.spot]);
     await client.query(`INSERT INTO "SpotVersion" (id, "spotId", version, "solverRunId", "candidateManifest", "publicPayload", "privateSolutionPayload", "normalizerVersion", "selectionRankingVersion", "publicPayloadSha256", "privatePayloadSha256", status) VALUES ($1, $2, 1, $3, '{}'::jsonb, $4::jsonb, '{}'::jsonb, '1', '1', 'public-hash', 'private-hash', 'VALIDATED')`, [ids.version, ids.spot, ids.run, publicPayload]);
     await client.query(`INSERT INTO "GuestSession" (id, "tokenHash", "expiresAt") VALUES ($1, $2, now() + interval '1 day')`, [ids.guest, `${suffix}_token`]);
     await client.query(`INSERT INTO "Attempt" (id, "guestSessionId", "spotId", "spotVersionId", official, "idempotencyKey", "submittedPayload", "resultPayload", "overallSimilarity", "metricKey", "metricVersion", "aggregatorKey", "aggregatorVersion") VALUES ($1, $2, $3, $4, true, 'first-idempotency-key', '{}'::jsonb, '{}'::jsonb, 100, 'l1', 1, 'equal_average', 1)`, [ids.attempt, ids.guest, ids.spot, ids.version]);

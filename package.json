@@ -15,9 +15,11 @@
     "db:seed": "node prisma/seed.mjs",
     "spot:ingest": "node scripts/ingest-spot.mjs",
     "spot:manage": "node scripts/manage-spot.mjs",
+    "test:load": "node scripts/load-smoke.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "node scripts/lint.mjs src tests",
-    "test": "tsc -p tsconfig.build.json && node --test tests/*.test.mjs"
+    "test": "tsc -p tsconfig.build.json && node --test tests/*.test.mjs && vitest run",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@poker-trainer/contracts": "file:../contracts",
@@ -32,6 +34,7 @@
     "@types/node": "^22.15.0",
     "@types/pg": "^8.15.5",
     "prisma": "^6.15.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

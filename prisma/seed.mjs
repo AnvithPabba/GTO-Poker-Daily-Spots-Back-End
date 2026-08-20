@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 try {
   const config = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     pot: 50,
     effective_stack: 100,
     board: ["Qs", "Jh", "2h"],

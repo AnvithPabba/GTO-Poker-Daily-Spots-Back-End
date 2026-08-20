@@ -18,10 +18,10 @@ test("public API serves immutable public spots and scores one official then prac
   const publicationDate = addPacificDays(pacificDate(), -1);
   const sourceHash = "d".repeat(64);
   const publicPayload = {
-    schemaVersion: 1, spotId: ids.spot, spotVersionId: ids.version, mode: "single_hand", publicationDate, slotOrder: 1,
+    schemaVersion: 2, spotId: ids.spot, spotVersionId: ids.version, publicationDate, slotOrder: 1,
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
-    legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs",
+    legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
   const privatePayload = { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: 1, frequencies: { a0: 2_500, a1: 7_500 } } }, reachedRanges: { hero: { AhAs: 1 }, opponent: { KcKd: 1 } } };
   let server;
@@ -29,7 +29,7 @@ test("public API serves immutable public spots and scores one official then prac
     await prisma.solverTemplate.create({ data: { id: ids.template, familyId: suffix, version: 1, name: "API test", config: { pot: 50, effective_stack: 100, board: ["Qs", "Jh", "2h"], ranges: { ip: "AA", oop: "KK" } }, updatedAt: new Date() } });
     await prisma.solverJob.create({ data: { id: ids.job, templateId: ids.template, effectiveSeed: suffix, updatedAt: new Date() } });
     await prisma.solverRun.create({ data: { id: ids.run, jobId: ids.job, attemptNumber: 1, status: "SUCCEEDED", resolvedInput: {}, sourceHash, outputSha256: `${suffix}_output` } });
-    await prisma.spot.create({ data: { id: ids.spot, mode: "SINGLE_HAND", title: "API test spot", status: "PUBLISHED", updatedAt: new Date() } });
+    await prisma.spot.create({ data: { id: ids.spot, title: "API test spot", status: "PUBLISHED", updatedAt: new Date() } });
     await prisma.spotVersion.create({ data: { id: ids.version, spotId: ids.spot, version: 1, solverRunId: ids.run, candidateManifest: { sourceHash, path: ["root"], rankingVersion: "1", fallbackUsed: false }, publicPayload, privateSolutionPayload: privatePayload, normalizerVersion: "1", selectionRankingVersion: "1", publicPayloadSha256: payloadSha256(publicPayload), privatePayloadSha256: payloadSha256(privatePayload), status: "PUBLISHED", validatedAt: new Date(), publishedAt: new Date() } });
     await prisma.publicationSlot.create({ data: { id: `${suffix}_slot`, publicationDate: new Date(`${publicationDate}T00:00:00.000Z`), slotOrder: 1, spotVersionId: ids.version, status: "PUBLISHED", publishedAt: new Date(), updatedAt: new Date() } });
 
@@ -43,7 +43,15 @@ test("public API serves immutable public spots and scores one official then prac
     assert.equal(spotResponse.status, 200);
     const spotBody = await spotResponse.json();
     assert.equal(spotBody.spotId, ids.spot);
-    assert.equal(Object.hasOwn(spotBody, "privateSolutionPayload"), false);
+    const forbiddenKeys = new Set(["privateSolutionPayload", "frequencies", "reachedRanges", "reachWeight", "actionOrder", "gto", "solution"]);
+    const assertNoPrivateFields = (value) => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        assert.equal(forbiddenKeys.has(key), false, `private field leaked: ${key}`);
+        assertNoPrivateFields(child);
+      }
+    };
+    assertNoPrivateFields(spotBody);
     const etag = spotResponse.headers.get("etag");
     assert.ok(etag);
     assert.equal((await fetch(`${base}/api/v1/spots/${ids.spot}`, { headers: { "if-none-match": etag } })).status, 304);

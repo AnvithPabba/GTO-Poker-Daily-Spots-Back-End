@@ -1,4 +1,4 @@
-import { Prisma, SolverJobStatus, SolverRunStatus, SpotMode, SpotStatus, SpotVersionStatus, type PrismaClient } from "@prisma/client";
+import { Prisma, SolverJobStatus, SolverRunStatus, SpotStatus, SpotVersionStatus, type PrismaClient } from "@prisma/client";
 import { payloadSha256, validateNormalizedEnvelope, type NormalizedEnvelope } from "./normalized.js";
 
 export type PersistRunInput = {
@@ -69,7 +69,6 @@ export async function persistValidatedDraft(
     const spot = existingSpot ?? await tx.spot.create({
       data: {
         id: envelope.publicPayload.spotId,
-        mode: envelope.publicPayload.mode === "single_hand" ? SpotMode.SINGLE_HAND : SpotMode.MULTI_HAND,
         title: spotMetadata.title,
         description: spotMetadata.description ?? null,
         ...(spotMetadata.tags !== undefined ? { tags: spotMetadata.tags as Prisma.InputJsonValue } : {}),

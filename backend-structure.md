@@ -10,26 +10,31 @@ See [../../overall-structure.md](../../overall-structure.md) for the ordered imp
 
 ### Current implementation boundary
 
-Blocks 3–7 are implemented as a local backend foundation: the Prisma schema
+Blocks 3–7A are implemented as a local backend foundation: the Prisma schema
 and migration, archive/import command, provider normalization and validation,
 Pacific publication/replenishment jobs, public read endpoints, guest
 completion hints, synchronous attempt scoring, and their unit/database/full-
-stack tests. The native TexasSolver process remains on the Mac host; Docker
 containers receive only normalized artifacts through the private ingestion
 boundary. The exact operator procedure is
 [`docs/spot-ingestion.md`](docs/spot-ingestion.md).
 
-The implemented pre-production contract still distinguishes `single_hand`
-from `multi_hand`. Master-roadmap Block 7A is the required coordinated change
-before frontend work: every spot will have one required featured concrete hand
-plus zero to nineteen optional selectable concrete hands and explicit public
-table-presentation metadata.
+Blocks 8–14 now include the runnable React-facing v2 boundary, provider-backed
+account history, cookie rotation, loopback admin calendar/job controls with
+append-only audit records, filesystem archive/checksum ports, cache/metrics
+ports, and deterministic load smoke tests. External OIDC/JWKS, object storage,
+Prometheus, CDN, and multi-replica deployment adapters remain explicit
+provider injection points rather than hidden local implementations.
+
+The implemented v2 contract removes the old public mode split. Every spot has
+one required featured concrete hand, a selectable catalog
+of one to twenty concrete hands, and explicit hero/dealer/position/chip
+presentation metadata. Frequencies and reached ranges remain private JSONB.
 
 ## Runtime Responsibilities
 
 Use the same backend codebase with separate process roles:
 
-- **API process:** Public reads, guest sessions, synchronous attempt validation/scoring, and localhost admin APIs.
+- **API process:** Public reads, guest/account sessions, synchronous attempt validation/scoring, and localhost admin APIs.
 - **Scheduler/worker process:** `pg-boss` schedules, buffer checks, publication, cleanup, and non-native background work.
 - **Host solver worker:** A Mac-native process that uses the ownership-checked lease helpers, invokes `console_solver`, archives output, selects candidates, normalizes payloads, and reports heartbeats/results.
 - **PostgreSQL:** Prisma application state and `pg-boss` durable queue state.
@@ -111,10 +116,9 @@ type AttemptRequest = {
 ```
 
 Every allocation is an integer number of basis points and every hand totals
-exactly `10_000`. The target Block 7A contract accepts one through twenty unique
-concrete combos from the public selectable set, requires the featured combo,
-and ignores every unselected combo. Until Block 7A is implemented, the current
-runtime retains its documented `single_hand`/`multi_hand` validation.
+exactly `10_000`. The v2 contract accepts one through twenty unique concrete
+combos from the public selectable set, requires the featured combo, and ignores
+every unselected combo.
 
 The successful response is the first point where solution data may be returned:
 
@@ -227,8 +231,8 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 ### `Spot`
 
 - `id`, stable public identity, title/metadata/tags, and lifecycle status summary.
-- The current pre-production `mode` column is removed by Block 7A because every
-  target spot supports the same featured-hand-plus-optional-extras behavior.
+- The former `mode` column is removed by the v2 forward migration because every
+  spot supports the same featured-hand-plus-optional-extras behavior.
 - `createdAt`, `updatedAt`, optional current approved/published version relation.
 - Contains no mutable solution frequency.
 
@@ -257,6 +261,8 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 ### `Attempt`
 
 - `id`, `guestSessionId`, `spotId`, immutable `spotVersionId`.
+- Optional `accountId` is a separate authenticated owner; account and guest
+  histories never merge.
 - `official` boolean, `practiceOrdinal`, idempotency key.
 - Validated submission JSONB, result JSONB, overall score.
 - `metricKey`, `metricVersion`, `aggregatorKey`, `aggregatorVersion`.
@@ -264,6 +270,10 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 - Unique `(guestSessionId, spotVersionId, idempotencyKey)`.
 - A database-enforced partial unique constraint for one official attempt per `(guestSessionId, spotVersionId)`; add with SQL migration if Prisma cannot express it directly.
 - Indexes for guest archive completion/history and spot analytics.
+
+`Account` stores the provider subject, optional email, and role JSON. Its
+official-attempt uniqueness and idempotency constraints mirror the guest
+constraints while retaining separate histories.
 
 Lifecycle/audit events may use a separate append-only audit table during implementation. They should not be overloaded into mutable JSON logs on these records.
 
@@ -552,12 +562,11 @@ Do not expose PostgreSQL or the raw archive publicly. Do not copy `console_solve
 
 ## Backend Completion Checklist
 
-The checked items are the implemented Blocks 3–7 foundation. Localhost admin
-controllers, a production host-worker lease consumer, restore drills, and
-operational alert sinks remain explicit follow-up work rather than being
-silently implied by the shared Compose image.
+The local implementation covers the Blocks 3–14 application boundary. External
+providers and production drills remain deployment gates; they are not implied
+by the Compose image.
 
-- [ ] All versioned public and localhost admin endpoints match shared contracts (public endpoints are complete; admin routes remain later work).
+- [x] All versioned public and localhost admin endpoints match shared contracts (admin mutations remain loopback guarded).
 - [x] `SolverTemplate`, `SolverJob`, `SolverRun`, `Spot`, `SpotVersion`, `PublicationSlot`, `GuestSession`, and `Attempt` have migrations and constraints.
 - [x] Public and private payloads are independently stored and validated.
 - [x] GET paths cannot query/serialize solution frequencies.
@@ -570,7 +579,8 @@ silently implied by the shared Compose image.
 - [x] Missing current-date content returns latest published with an explicit fallback flag and warning.
 - [x] First accepted guest attempt is official and later attempts are practice under serializable transaction/unique constraints.
 - [x] The current runtime enforces exact `10_000` totals and one-to-twenty concrete-hand boundaries.
-- [ ] Block 7A requires the featured combo in every attempt, permits zero to nineteen optional extras, adds public presentation metadata, and retires the public mode distinction.
+- [x] Block 7A requires the featured combo in every attempt, permits zero to nineteen optional extras, adds public presentation metadata, and retires the public mode distinction.
 - [x] L1 and equal-average calculations match the master/frontend contracts.
 - [x] Scoring stays synchronous and is not added to a queue.
+- [x] Account/OIDC ports, guest/account isolation, cookie rotation, metrics, archive/cache ports, and deterministic load smoke tests are covered by unit/integration checks.
 - [x] Containers exclude the native solver, raw output, secrets, and private frontend data.

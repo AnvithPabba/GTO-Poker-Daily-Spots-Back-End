@@ -9,6 +9,7 @@ type ProviderOptions = {
 };
 
 const cardPattern = /^[2-9TJQKA][cdhs]$/;
+const comboPattern = /^[2-9TJQKA][cdhs][2-9TJQKA][cdhs]$/;
 const hashPattern = /^[a-f0-9]{64}$/;
 
 function sourceHashFromProvider(source: unknown): string {
@@ -38,6 +39,15 @@ function actionType(value: unknown, solverLabel: string): "check" | "bet" | "cal
   if (value === "check" || value === "bet" || value === "call" || value === "raise" || value === "fold") return value;
   if (value === "allin" || value === "all-in") return /^RAISE\b/i.test(solverLabel) ? "raise" : "bet";
   throw new Error(`unsupported provider action type ${String(value)}`);
+}
+
+function comboCategory(combo: string): "pair" | "suited" | "offsuit" {
+  const firstRank = combo[0];
+  const secondRank = combo[2];
+  const firstSuit = combo[1];
+  const secondSuit = combo[3];
+  if (firstRank === secondRank) return "pair";
+  return firstSuit === secondSuit ? "suited" : "offsuit";
 }
 
 function basisPointFrequencies(value: unknown, actionOrder: string[], combo: string): Record<string, number> {
@@ -165,14 +175,31 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   }));
   const hero = actor === "ip" ? "ip" : "oop";
   const opponent = hero === "ip" ? "oop" : "ip";
+  const rawSelectable = Array.isArray(providerPublic.selectableCombos)
+    ? providerPublic.selectableCombos.map((entry) => typeof entry === "string" ? entry : (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).combo === "string" ? (entry as Record<string, unknown>).combo as string : ""))
+    : Object.keys(byCombo);
+  const selectableCombos = Array.from(new Set([featuredCombo, ...rawSelectable]))
+    .filter((combo) => comboPattern.test(combo) && Object.hasOwn(byCombo, combo));
+  if (!selectableCombos.length) throw new Error("provider selectable combo catalog is empty");
+  const rawPresentation = providerPublic.presentation && typeof providerPublic.presentation === "object" ? providerPublic.presentation as Record<string, unknown> : {};
+  const positions = rawPresentation.positions && typeof rawPresentation.positions === "object" ? rawPresentation.positions as Record<string, unknown> : {};
+  const presentation = {
+    heroActor: hero,
+    dealerActor: rawPresentation.dealerActor === "ip" || rawPresentation.dealerActor === "oop" ? rawPresentation.dealerActor : initialActor,
+    positions: {
+      ip: typeof positions.ip === "string" && positions.ip.length > 0 ? positions.ip : "IP",
+      oop: typeof positions.oop === "string" && positions.oop.length > 0 ? positions.oop : "OOP",
+    },
+    holdingVisibility: "featured_hero" as const,
+    chipUnit: rawPresentation.chipUnit === "currency" ? "currency" as const : "bb" as const,
+  };
   const normalized = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     sourceHash,
     publicPayload: {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       spotId,
       spotVersionId: typeof providerPublic.spotVersionId === "string" ? providerPublic.spotVersionId : (options.spotVersionId ?? `${spotId}_v1`),
-      mode: "single_hand" as const,
       publicationDate,
       slotOrder: options.slotOrder ?? (typeof providerPublic.slotOrder === "number" ? providerPublic.slotOrder : 1),
       initialState,
@@ -180,6 +207,8 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
       decision: state,
       legalActions,
       featuredCombo,
+      selectableCombos: selectableCombos.map((combo) => ({ combo, category: comboCategory(combo) })),
+      presentation,
     },
     privateSolutionPayload: {
       schemaVersion: 1,
@@ -188,7 +217,7 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
       reachedRanges: { hero: reachedCombos(privatePayload.ranges, hero), opponent: reachedCombos(privatePayload.ranges, opponent) },
     },
     candidateManifest: { sourceHash, path: providerPath(source), selectedCombo: featuredCombo, fallbackUsed: false, rankingVersion: "1" },
-    provenance: { normalizerVersion: "provider-python-v1", selectionRankingVersion: "1" },
+    provenance: { normalizerVersion: "provider-python-v2", selectionRankingVersion: "1" },
   };
   return validateNormalizedEnvelope(normalized);
 }
