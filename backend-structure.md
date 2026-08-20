@@ -148,7 +148,7 @@ An idempotent replay returns the originally stored response. A new idempotency k
 
 ## Localhost-Only Admin Endpoints
 
-All routes below live under `/api/v1/admin`, use the same application services as jobs/schedulers, and fail closed unless the direct peer is loopback. Do not trust `X-Forwarded-For` unless an explicitly configured trusted local proxy is present. Bind the prototype admin listener to loopback where practical.
+All routes below live under `/api/v1/admin`, use the same application services as jobs/schedulers, and fail closed unless the direct peer is loopback. Do not trust `X-Forwarded-For` unless an explicitly configured trusted local proxy is present. In the development Compose stack, Nginx adds `X-Local-Admin-Proxy: 1` and the API accepts it only with `ADMIN_TRUSTED_PROXY=true` outside production; direct API access remains loopback-only. Bind the prototype admin listener to loopback where practical.
 
 | Method and route | Purpose |
 | --- | --- |
