@@ -62,7 +62,7 @@ DATABASE_URL=postgresql://<role>:<password>@<host>:<port>/<database>
 ```
 
 Optional variables are `API_HOST`, `API_PORT`, `WORKER_HOST`, `WORKER_PORT`,
-`CORS_ORIGIN`, and `PG_BOSS_SCHEMA`. Invalid or missing values fail startup
+`CORS_ORIGIN`, `PG_BOSS_SCHEMA`, and `ADMIN_TRUSTED_PROXY`. Invalid or missing values fail startup
 with a concise validation error; passwords are never printed.
 
 Health endpoints:
@@ -158,7 +158,12 @@ not publish automatically.
 `GET /api/v1/auth/me` and `GET /api/v1/auth/history` use the injected
 provider-neutral bearer verifier when one is configured. Account attempts use
 their own idempotency and official-attempt constraints; they are never merged
-with an opaque guest-cookie history. The local admin surface is loopback-only:
+with an opaque guest-cookie history. The local admin surface is loopback-only.
+Compose's Nginx frontend adds a private proxy marker for `/api/v1/admin/*`;
+the API accepts that marker only when `ADMIN_TRUSTED_PROXY=true` and
+`NODE_ENV` is not `production`. Direct API requests still require a loopback
+source, and production keeps the marker disabled. This lets the local browser
+dashboard work without making the admin surface public:
 `/api/v1/admin/calendar`, `/metrics`, `/audit`, guarded job retry/hold/cancel,
 and version approve/schedule/hold operations are available for local
 development. An optional injected identity provider additionally requires the
