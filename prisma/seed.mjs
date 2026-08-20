@@ -34,7 +34,7 @@ try {
   // a real environment.
   const publicationDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const [year, month, day] = publicationDate.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day - 1));
+  const date = new Date(Date.UTC(year, month - 1, day - 2));
   const dateString = date.toISOString().slice(0, 10);
   const ids = { template: seededTemplate.id, job: "development-default-job", run: "development-default-run", spot: "development-default-spot", version: "development-default-spot-v1", slot: "development-default-slot" };
   const sourceHash = "f".repeat(64);
@@ -70,8 +70,12 @@ try {
   await prisma.solverRun.upsert({ where: { id: ids.run }, update: { jobId: ids.job, attemptNumber: 1, status: "SUCCEEDED", resolvedInput: config, sourceHash, outputSha256: `${sourceHash}_output` }, create: { id: ids.run, jobId: ids.job, attemptNumber: 1, status: "SUCCEEDED", resolvedInput: config, sourceHash, outputSha256: `${sourceHash}_output` } });
   await prisma.solverJob.update({ where: { id: ids.job }, data: { successfulRunId: ids.run } });
   await prisma.spot.upsert({ where: { id: ids.spot }, update: { title: "Development flop: BTN versus BB", status: "PUBLISHED", currentVersionId: ids.version }, create: { id: ids.spot, title: "Development flop: BTN versus BB", status: "PUBLISHED" } });
-  await prisma.spotVersion.upsert({ where: { id: ids.version }, update: { spotId: ids.spot, version: 1, solverRunId: ids.run, candidateManifest: { sourceHash, path: ["root", "CHECK"] }, publicPayload, privateSolutionPayload, publicPayloadSha256: sourceHash, privatePayloadSha256: sourceHash, schemaVersion: 2, normalizerVersion: "seed", selectionRankingVersion: "1", status: "PUBLISHED", publishedAt: new Date() }, create: { id: ids.version, spotId: ids.spot, version: 1, solverRunId: ids.run, candidateManifest: { sourceHash, path: ["root", "CHECK"] }, publicPayload, privateSolutionPayload, publicPayloadSha256: sourceHash, privatePayloadSha256: sourceHash, schemaVersion: 2, normalizerVersion: "seed", selectionRankingVersion: "1", status: "PUBLISHED", publishedAt: new Date() } });
+  const existingVersion = await prisma.spotVersion.findUnique({ where: { id: ids.version }, select: { id: true } });
+  if (!existingVersion) {
+    await prisma.spotVersion.create({ data: { id: ids.version, spotId: ids.spot, version: 1, solverRunId: ids.run, candidateManifest: { sourceHash, path: ["root", "CHECK"] }, publicPayload, privateSolutionPayload, publicPayloadSha256: sourceHash, privatePayloadSha256: sourceHash, schemaVersion: 2, normalizerVersion: "seed", selectionRankingVersion: "1", status: "PUBLISHED", publishedAt: new Date() } });
+  }
   await prisma.spot.update({ where: { id: ids.spot }, data: { currentVersionId: ids.version, status: "PUBLISHED" } });
+  await prisma.publicationSlot.deleteMany({ where: { spotVersionId: ids.version, id: { not: ids.slot } } });
   await prisma.publicationSlot.upsert({ where: { id: ids.slot }, update: { publicationDate: date, slotOrder: 1, spotVersionId: ids.version, status: "PUBLISHED", publishedAt: new Date() }, create: { id: ids.slot, publicationDate: date, slotOrder: 1, spotVersionId: ids.version, status: "PUBLISHED", publishedAt: new Date() } });
   console.log(`seeded local development spot ${ids.spot} for ${dateString}`);
 } finally {
