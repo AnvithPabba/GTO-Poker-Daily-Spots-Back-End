@@ -32,10 +32,11 @@ try {
   // usable in the browser without pretending that a real solver answer is
   // part of the repository.  Native Solver ingestion replaces these rows in
   // a real environment.
-  const publicationDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const [year, month, day] = publicationDate.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day - 2));
-  const dateString = date.toISOString().slice(0, 10);
+  // Keep the fixture on a fixed historical date.  This avoids rewriting an
+  // immutable SpotVersion every day and leaves current-date fallback behavior
+  // deterministic across repeated local setup runs.
+  const dateString = "2026-01-01";
+  const date = new Date(`${dateString}T00:00:00.000Z`);
   const ids = { template: seededTemplate.id, job: "development-default-job", run: "development-default-run", spot: "development-default-spot", version: "development-default-spot-v1", slot: "development-default-slot" };
   const sourceHash = "f".repeat(64);
   const publicPayload = {
