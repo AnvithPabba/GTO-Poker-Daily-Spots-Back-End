@@ -1,0 +1,37 @@
+{
+  "name": "@poker-trainer/backend",
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
+    "db:generate": "prisma generate",
+    "db:format": "prisma format",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "node prisma/seed.mjs",
+    "spot:ingest": "node scripts/ingest-spot.mjs",
+    "spot:manage": "node scripts/manage-spot.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "node scripts/lint.mjs src tests",
+    "test": "tsc -p tsconfig.build.json && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@poker-trainer/contracts": "file:../contracts",
+    "@prisma/client": "^6.15.0",
+    "express": "^5.1.0",
+    "pg": "^8.16.3",
+    "pg-boss": "^12.5.8",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.15.5",
+    "prisma": "^6.15.0",
+    "typescript": "^5.7.2"
+  }
+}

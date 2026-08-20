@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SolverTemplateStatus {
+  ACTIVE
+  HELD
+  RETIRED
+}
+
+enum SolverJobStatus {
+  QUEUED
+  RUNNING
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  HELD
+  CANCELLED
+}
+
+enum SolverRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum SpotMode {
+  SINGLE_HAND
+  MULTI_HAND
+}
+
+enum SpotStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SpotVersionStatus {
+  DRAFT
+  VALIDATED
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+  SUPERSEDED
+}
+
+enum PublicationSlotStatus {
+  SCHEDULED
+  HELD
+  PUBLISHED
+  CANCELLED
+}
+
+model SolverTemplate {
+  id                      String               @id @default(cuid())
+  familyId                String
+  version                 Int
+  name                    String
+  description             String?
+  tags                    Json?
+  status                  SolverTemplateStatus @default(ACTIVE)
+  config                  Json
+  configSchemaVersion     Int                  @default(1)
+  selectionRankingVersion String               @default("1")
+  defaultSeed             String?
+  supersedesTemplateId    String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  jobs SolverJob[]
+
+  @@unique([familyId, version])
+  @@index([status, familyId])
+}
+
+model SolverJob {
+  id               String          @id @default(cuid())
+  templateId       String
+  effectiveSeed    String
+  priority         Int             @default(0)
+  status           SolverJobStatus @default(QUEUED)
+  attemptCount     Int             @default(0)
+  maxAttempts      Int             @default(3)
+  nextAttemptAt    DateTime        @default(now())
+  leaseOwner       String?
+  leaseExpiresAt   DateTime?
+  heartbeatAt      DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  pgBossJobId      String?
+  successfulRunId  String?         @unique
+  createdAt        DateTime        @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  updatedAt        DateTime        @updatedAt
+
+  template      SolverTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  runs          SolverRun[]
+  successfulRun SolverRun?     @relation("SuccessfulJobRun", fields: [successfulRunId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt, priority, createdAt])
+  @@index([templateId, createdAt])
+}
+
+model SolverRun {
+  id                      String          @id @default(cuid())
+  jobId                   String
+  attemptNumber           Int
+  status                  SolverRunStatus @default(RUNNING)
+  solverVersion           String?
+  platform                String?
+  resolvedInput           Json
+  startedAt               DateTime        @default(now())
+  finishedAt              DateTime?
+  durationMs              Int?
+  exitCode                Int?
+  logTail                 String?
+  sourceHash              String?
+  inputSha256             String?
+  outputSha256            String?
+  logSha256               String?
+  archiveInputKey         String?
+  archiveOutputKey        String?
+  archiveLogKey           String?
+  archiveMetadataKey      String?
+  archiveVerifiedAt       DateTime?
+  normalizerVersion       String?
+  selectionRankingVersion String?
+  failureDetails          Json?
+  createdAt               DateTime        @default(now())
+
+  job           SolverJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  successfulFor SolverJob?    @relation("SuccessfulJobRun")
+  spotVersions  SpotVersion[]
+
+  @@unique([jobId, attemptNumber])
+  @@unique([outputSha256])
+  @@index([status, createdAt])
+  @@index([sourceHash])
+}
+
+model Spot {
+  id               String     @id @default(cuid())
+  mode             SpotMode
+  title            String
+  description      String?
+  tags             Json?
+  status           SpotStatus @default(DRAFT)
+  currentVersionId String?    @unique
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  versions       SpotVersion[]
+  currentVersion SpotVersion?  @relation("CurrentSpotVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  attempts       Attempt[]
+
+  @@index([status, updatedAt])
+}
+
+model SpotVersion {
+  id                      String            @id @default(cuid())
+  spotId                  String
+  version                 Int
+  solverRunId             String
+  candidateManifest       Json
+  publicPayload           Json
+  privateSolutionPayload  Json
+  schemaVersion           Int               @default(1)
+  normalizerVersion       String
+  selectionRankingVersion String
+  publicPayloadSha256     String
+  privatePayloadSha256    String
+  validationReport        Json?
+  status                  SpotVersionStatus @default(DRAFT)
+  createdAt               DateTime          @default(now())
+  validatedAt             DateTime?
+  approvedAt              DateTime?
+  scheduledAt             DateTime?
+  publishedAt             DateTime?
+  supersededAt            DateTime?
+
+  spot             Spot              @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  solverRun        SolverRun         @relation(fields: [solverRunId], references: [id], onDelete: Restrict)
+  currentForSpot   Spot?             @relation("CurrentSpotVersion")
+  publicationSlots PublicationSlot[]
+  attempts         Attempt[]
+
+  @@unique([spotId, version])
+  @@index([status, createdAt])
+  @@index([spotId, status])
+}
+
+model PublicationSlot {
+  id              String                @id @default(cuid())
+  publicationDate DateTime              @db.Date
+  slotOrder       Int
+  spotVersionId   String
+  status          PublicationSlotStatus @default(SCHEDULED)
+  scheduledAt     DateTime              @default(now())
+  publishedAt     DateTime?
+  heldAt          DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  spotVersion SpotVersion @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
+
+  @@index([status, publicationDate, slotOrder])
+  @@index([spotVersionId, status])
+}
+
+model GuestSession {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  rotationOfId  String?
+  abuseMetadata Json?
+
+  attempts Attempt[]
+
+  @@index([expiresAt, revokedAt])
+}
+
+model Attempt {
+  id                String   @id @default(cuid())
+  guestSessionId    String
+  spotId            String
+  spotVersionId     String
+  official          Boolean  @default(false)
+  practiceOrdinal   Int      @default(0)
+  idempotencyKey    String
+  submittedPayload  Json
+  resultPayload     Json
+  overallSimilarity Float
+  metricKey         String
+  metricVersion     Int
+  aggregatorKey     String
+  aggregatorVersion Int
+  createdAt         DateTime @default(now())
+  requestMetadata   Json?
+
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+  spot         Spot         @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  spotVersion  SpotVersion  @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([guestSessionId, spotVersionId, idempotencyKey])
+  @@index([guestSessionId, createdAt])
+  @@index([spotVersionId, createdAt])
+  @@index([spotId, createdAt])
+}
