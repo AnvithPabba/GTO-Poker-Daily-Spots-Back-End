@@ -19,6 +19,8 @@ test("Pacific publication helpers handle DST and calendar arithmetic", () => {
   assert.equal(pacificMidnightUtc("2026-01-15").toISOString(), "2026-01-15T08:00:00.000Z");
   assert.equal(pacificMidnightUtc("2026-07-15").toISOString(), "2026-07-15T07:00:00.000Z");
   assert.equal(addPacificDays("2026-08-20", 7), "2026-08-27");
+  assert.throws(() => addPacificDays("2026-02-30", 1), /publication date is invalid/);
+  assert.throws(() => pacificMidnightUtc("not-a-date"), /publication date must be YYYY-MM-DD/);
 });
 
 test("spot version lifecycle rejects skips and allows only guarded advances", async () => {

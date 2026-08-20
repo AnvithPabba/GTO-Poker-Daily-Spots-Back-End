@@ -2,6 +2,13 @@ import { PublicationSlotStatus, SpotStatus, SpotVersionStatus, type PrismaClient
 
 export const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
+function assertIsoDate(value: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("publication date must be YYYY-MM-DD");
+  const [year, month, day] = value.split("-").map(Number);
+  const candidate = new Date(Date.UTC(year!, month! - 1, day!));
+  if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() !== month! - 1 || candidate.getUTCDate() !== day) throw new Error("publication date is invalid");
+}
+
 function dateParts(date: Date): Record<string, string> {
   return Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: PACIFIC_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
 }
@@ -12,12 +19,15 @@ export function pacificDate(date = new Date()): string {
 }
 
 export function addPacificDays(date: string, days: number): string {
+  assertIsoDate(date);
+  if (!Number.isInteger(days)) throw new Error("days must be an integer");
   const [year, month, day] = date.split("-").map(Number);
   const result = new Date(Date.UTC(year!, month! - 1, day! + days));
   return result.toISOString().slice(0, 10);
 }
 
 export function pacificMidnightUtc(date: string): Date {
+  assertIsoDate(date);
   const [year, month, day] = date.split("-").map(Number);
   const naive = new Date(Date.UTC(year!, month! - 1, day!));
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: PACIFIC_TIME_ZONE, timeZoneName: "longOffset", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(naive).map((part) => [part.type, part.value]));
@@ -50,7 +60,8 @@ export async function approveSpotVersion(prisma: PrismaClient, versionId: string
 }
 
 export async function scheduleSpotVersion(prisma: PrismaClient, versionId: string, publicationDate: string, slotOrder: number) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(publicationDate) || !Number.isInteger(slotOrder) || slotOrder < 1) throw new Error("invalid publication slot");
+  try { assertIsoDate(publicationDate); } catch { throw new Error("invalid publication slot"); }
+  if (!Number.isInteger(slotOrder) || slotOrder < 1) throw new Error("invalid publication slot");
   return prisma.$transaction(async (tx) => {
     const version = await tx.spotVersion.findUniqueOrThrow({ where: { id: versionId } });
     assertLifecycleTransition(version.status, SpotVersionStatus.SCHEDULED);
@@ -61,6 +72,7 @@ export async function scheduleSpotVersion(prisma: PrismaClient, versionId: strin
 }
 
 export async function publishPacificDate(prisma: PrismaClient, publicationDate: string, now = new Date()) {
+  assertIsoDate(publicationDate);
   return prisma.$transaction(async (tx) => {
     const slots = await tx.publicationSlot.findMany({ where: { publicationDate: new Date(`${publicationDate}T00:00:00.000Z`), status: PublicationSlotStatus.SCHEDULED }, orderBy: { slotOrder: "asc" } });
     const published = [];

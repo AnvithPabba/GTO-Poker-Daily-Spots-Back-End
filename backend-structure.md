@@ -493,7 +493,7 @@ Every selected concrete hand has equal weight. Reach does not weight the version
 - Index attempts by guest/version, including the official uniqueness constraint and archive-completion query.
 - Index solver jobs by claimable state/time/priority and runs by job/attempt.
 - Generate strong ETags from immutable public payload hashes.
-- Use long public cache headers for immutable version resources and short `stale-while-revalidate` caching for today/archive indexes.
+- Use long public cache headers for immutable version resources and short `stale-while-revalidate` caching for anonymous today/archive indexes. Guest-personalized indexes vary by `Cookie` and are `private, no-store`.
 - An optional in-process or CDN cache may store public payloads only. Private solutions and guest-specific completion data are private/no-store unless a safe key strategy is proven.
 - Invalidate/revalidate the mutable daily index after publication; immutable versions require no invalidation.
 

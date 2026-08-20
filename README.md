@@ -79,6 +79,14 @@ when PostgreSQL is unavailable. Pool and pg-boss errors are handled so a
 transient database outage does not kill either health server. SIGTERM/SIGINT
 close the HTTP server, queue connection, and PostgreSQL pool gracefully.
 
+The health app advertises only the configured origin, varies CORS responses by
+origin, and allows the browser methods/headers needed for public reads and
+attempt submissions. Public daily indexes use short cache lifetimes and vary
+by the guest cookie; a recognized guest receives `private, no-store`
+completion data so a shared cache cannot leak another player's completion
+state. Unknown errors are logged server-side and returned as stable generic
+error envelopes.
+
 The deterministic load smoke test exercises a health or read endpoint without
 external services:
 
@@ -98,6 +106,19 @@ The complete local stack is started from `webapp/`:
 cp ../.env.example ../.env
 docker compose -f ../docker-compose.yml up -d --build
 ```
+
+For a new local volume, apply the schema and seed the safe synthetic browser
+spot with the development superuser (never with `trainer_api` or
+`solver_worker`):
+
+```bash
+DATABASE_URL='postgresql://postgres:replace-with-a-local-development-secret@127.0.0.1:55432/poker_trainer_dev' pnpm db:migrate
+DATABASE_URL='postgresql://postgres:replace-with-a-local-development-secret@127.0.0.1:55432/poker_trainer_dev' pnpm db:seed
+```
+
+`db:seed` is idempotent and creates only a synthetic local challenge. It is
+not a source of production GTO content; use the private normalized-solver
+ingestion procedure below for real spots.
 
 The native Mac worker must use the host-published database endpoint:
 

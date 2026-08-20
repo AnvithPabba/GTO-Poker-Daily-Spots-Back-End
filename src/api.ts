@@ -26,7 +26,10 @@ function errorResponse(response: Response, status: number, code: string, message
 function mappedError(error: unknown): { status: 400 | 401 | 403 | 404 | 409 | 429 | 503 | 500; code: string; message: string; issues?: Array<{ path: Array<string | number>; message: string }> } {
   if (error instanceof AppError) return { status: error.status, code: error.code, message: error.message, ...(error.issues ? { issues: error.issues } : {}) };
   if (error instanceof ZodError) return { status: 400, code: "BAD_REQUEST", message: "request validation failed", issues: error.issues.map((issue) => ({ path: issue.path, message: issue.message })) };
-  return { status: 500, code: "INTERNAL", message: error instanceof Error ? error.message : "request failed" };
+  // Never return database/stack/provider messages to a browser.  The caller
+  // receives a stable error contract while the process logger can retain the
+  // internal diagnostic in a deployment-specific error boundary.
+  return { status: 500, code: "INTERNAL", message: "request failed" };
 }
 
 function requestId(request: Request): string {
@@ -187,6 +190,8 @@ export function createPublicApiRouter(options: ApiOptions): Router {
       const completions = await completionMap(request, options, slots.map((slot) => slot.spotVersionId));
       const data = todayResponseSchema.parse({ publicationDate: today, timezone: "America/Los_Angeles", isFallback, ...(fallbackFromDate ? { fallbackFromDate } : {}), spots: slots.map((slot) => summaryFromPayload(slot.spotVersion.publicPayload, slot.slotOrder, slot.spotVersion.spot.title, completions?.get(slot.spotVersionId))) });
       response.setHeader("ETag", etag(data));
+      response.setHeader("Vary", "Origin, Cookie");
+      response.setHeader("Cache-Control", completions ? "private, no-store" : (isFallback ? "public, max-age=15, stale-while-revalidate=30" : "public, max-age=30, stale-while-revalidate=60"));
       if (request.header("if-none-match") === response.getHeader("ETag")) return response.status(304).end();
       return response.json(data);
     } catch (error) {

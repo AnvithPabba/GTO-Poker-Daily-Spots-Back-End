@@ -61,6 +61,8 @@ test("public API serves immutable public spots and scores one official then prac
     assert.equal(today.status, 200);
     assert.equal(todayBody.isFallback, true);
     assert.equal(todayBody.fallbackFromDate, publicationDate);
+    assert.match(today.headers.get("cache-control") ?? "", /public/);
+    assert.match(today.headers.get("vary") ?? "", /Cookie/);
 
     const request = { spotVersionId: ids.version, idempotencyKey: `${suffix}_idempotency_1`, hands: [{ combo: "AhAs", allocations: { a0: 5_000, a1: 5_000 } }] };
     const first = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });

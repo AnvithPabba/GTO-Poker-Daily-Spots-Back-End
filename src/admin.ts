@@ -65,7 +65,10 @@ export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore, 
     const job = await prisma.solverJob.update({ where: { id: request.params.jobId }, data: { status: SolverJobStatus.CANCELLED }, select: { id: true, status: true } });
     await audit(request, "solver_job.cancel", request.params.jobId); response.json(job);
   } catch (error) { next(error); } });
-  router.use((error: unknown, _request: Request, response: Response, _next: (error?: unknown) => void) => response.status(500).json({ code: "ADMIN_FAILED", message: error instanceof Error ? error.message : "admin operation failed" }));
+  router.use((error: unknown, _request: Request, response: Response, _next: (error?: unknown) => void) => {
+    console.error(`admin operation failed: ${error instanceof Error ? error.message : String(error)}`);
+    response.status(500).json({ code: "ADMIN_FAILED", message: "admin operation failed" });
+  });
   return router;
 }
 
