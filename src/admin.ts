@@ -3,6 +3,8 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { approveSpotVersion, assertLifecycleTransition, countFutureCoverage, scheduleSpotVersion } from "./publication.js";
 import { SolverJobStatus, SpotVersionStatus } from "@prisma/client";
 import type { MetricsStore } from "./metrics.js";
+import type { IdentityProvider } from "./ports.js";
+import { requireRole } from "./auth.js";
 
 function loopback(request: Request): boolean {
   const address = request.socket.remoteAddress ?? "";
@@ -11,9 +13,13 @@ function loopback(request: Request): boolean {
 
 function denied(response: Response): void { response.status(403).json({ code: "FORBIDDEN", message: "admin is available only from loopback", requestId: response.getHeader("X-Request-ID") ?? "admin" }); }
 
-export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore): Router {
+export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore, identityProvider?: IdentityProvider): Router {
   const router = express.Router();
-  router.use((request, response, next) => loopback(request) ? next() : denied(response));
+  router.use((request, response, next) => {
+    if (!loopback(request)) return denied(response);
+    if (!identityProvider) return next();
+    return requireRole(identityProvider, request, "admin").then(() => next()).catch(next);
+  });
   async function audit(request: Request, operation: string, targetId: string, metadata?: unknown): Promise<void> {
     await prisma.adminAudit.create({ data: { actor: request.header("x-admin-actor")?.slice(0, 128) ?? null, operation, targetId, ...(metadata === undefined ? {} : { metadata: metadata as Prisma.InputJsonValue }) } });
   }

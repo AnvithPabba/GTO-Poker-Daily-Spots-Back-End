@@ -140,5 +140,6 @@ their own idempotency and official-attempt constraints; they are never merged
 with an opaque guest-cookie history. The local admin surface is loopback-only:
 `/api/v1/admin/calendar`, `/metrics`, `/audit`, guarded job retry/hold/cancel,
 and version approve/schedule/hold operations are available for local
-development. Mutations append an `AdminAudit` row and do not expose private
+development. An optional injected identity provider additionally requires the
+`admin` role. Mutations append an `AdminAudit` row and do not expose private
 frequency values.
