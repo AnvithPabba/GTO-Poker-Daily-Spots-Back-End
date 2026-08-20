@@ -23,4 +23,6 @@ test("running Compose stack exposes liveness, readiness, API contract, and no an
   assert.equal(frontend.status, 200);
   const proxy = await fetch("http://127.0.0.1:4173/api/health/live");
   assert.equal(proxy.status, 200);
+  const adminProxy = await fetch("http://127.0.0.1:4173/api/v1/admin/status");
+  assert.equal(adminProxy.status, 200);
 });

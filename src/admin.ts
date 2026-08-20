@@ -6,17 +6,21 @@ import type { MetricsStore } from "./metrics.js";
 import type { IdentityProvider } from "./ports.js";
 import { requireRole } from "./auth.js";
 
-function loopback(request: Request): boolean {
+function loopback(request: Request, allowTrustedProxy = false): boolean {
   const address = request.socket.remoteAddress ?? "";
-  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+  if (address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1") return true;
+  // The development Nginx container is the only trusted proxy. It adds this
+  // marker, and the API accepts it only when explicitly enabled by local
+  // configuration. Production keeps the default strict loopback policy.
+  return allowTrustedProxy && request.header("x-local-admin-proxy") === "1";
 }
 
 function denied(response: Response): void { response.status(403).json({ code: "FORBIDDEN", message: "admin is available only from loopback", requestId: response.getHeader("X-Request-ID") ?? "admin" }); }
 
-export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore, identityProvider?: IdentityProvider): Router {
+export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore, identityProvider?: IdentityProvider, options?: { allowTrustedProxy?: boolean }): Router {
   const router = express.Router();
   router.use((request, response, next) => {
-    if (!loopback(request)) return denied(response);
+    if (!loopback(request, options?.allowTrustedProxy)) return denied(response);
     if (!identityProvider) return next();
     return requireRole(identityProvider, request, "admin").then(() => next()).catch(next);
   });
@@ -72,4 +76,4 @@ export function createAdminRouter(prisma: PrismaClient, metrics?: MetricsStore, 
   return router;
 }
 
-export { loopback as isLoopbackRequest };
+export function isLoopbackRequest(request: Request, allowTrustedProxy = false): boolean { return loopback(request, allowTrustedProxy); }

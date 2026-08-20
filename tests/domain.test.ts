@@ -49,6 +49,12 @@ describe("backend domain and ports", () => {
     expect(isLoopbackRequest({ socket: { remoteAddress } } as never)).toBe(expected);
   });
 
+  it("accepts the development proxy marker only when explicitly enabled", () => {
+    const request = { socket: { remoteAddress: "172.18.0.3" }, headers: { "x-local-admin-proxy": "1" }, header(name: string) { return this.headers[name.toLowerCase()]; } } as never;
+    expect(isLoopbackRequest(request, false)).toBe(false);
+    expect(isLoopbackRequest(request, true)).toBe(true);
+  });
+
   it("marks guest cookies Secure only when the deployment requests it", () => {
     expect(guestCookieHeader("guest", "abc", false)).not.toContain("Secure");
     expect(guestCookieHeader("guest", "abc", true)).toContain("Secure");

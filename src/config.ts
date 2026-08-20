@@ -10,6 +10,7 @@ const environmentSchema = z.object({
   PG_BOSS_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).default("pgboss"),
   GUEST_COOKIE_HASH_SECRET: z.string().min(16).default("local-development-guest-cookie-secret"),
   GUEST_COOKIE_NAME: z.string().regex(/^[A-Za-z0-9_-]+$/).default("poker_guest"),
+  ADMIN_TRUSTED_PROXY: z.enum(["true", "false"]).transform((value) => value === "true").default("false"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
