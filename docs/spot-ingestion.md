@@ -1,5 +1,10 @@
 # Creating and publishing a spot
 
+The local admin dashboard is optional. Keep `ADMIN_ENABLED=false` and
+`ADMIN_TRUSTED_PROXY=false` whenever this stack is reachable through a tunnel;
+use the ingestion/management CLI or a separately protected operator service in
+that case. Setting both values to `true` is only for an unexposed local stack.
+
 This is the repeatable authoring path from a native TexasSolver run to a
 browser-visible database record. It runs on the Mac host. The Docker stack
 does not mount `SolverOutputs` or the native solver binary.

@@ -39,7 +39,9 @@ export async function startApi(): Promise<void> {
     guestCookieName: config.GUEST_COOKIE_NAME,
     secureCookies: config.NODE_ENV === "production",
   }));
-  app.use("/api/v1/admin", createAdminRouter(prisma, metrics, undefined, { allowTrustedProxy: config.ADMIN_TRUSTED_PROXY && config.NODE_ENV !== "production" }));
+  if (config.ADMIN_ENABLED) {
+    app.use("/api/v1/admin", createAdminRouter(prisma, metrics, undefined, { allowTrustedProxy: config.ADMIN_TRUSTED_PROXY && config.NODE_ENV !== "production" }));
+  }
   const server = createServer(app);
 
   await new Promise<void>((resolveServer, reject) => {

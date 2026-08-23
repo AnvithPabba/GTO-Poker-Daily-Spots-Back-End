@@ -167,7 +167,9 @@ the API accepts that marker only when `ADMIN_TRUSTED_PROXY=true` and
 source, and production keeps the marker disabled. This lets the local browser
 dashboard work without making the admin surface public:
 `/api/v1/admin/calendar`, `/metrics`, `/audit`, guarded job retry/hold/cancel,
-and version approve/schedule/hold operations are available for local
-development. An optional injected identity provider additionally requires the
-`admin` role. Mutations append an `AdminAudit` row and do not expose private
-frequency values.
+and version approve/schedule/hold operations are available only when
+`ADMIN_ENABLED=true`. The trusted Nginx proxy path additionally requires
+`ADMIN_TRUSTED_PROXY=true`; both are local-development settings and must remain
+false for a Cloudflare Tunnel or public deployment. An optional injected
+identity provider additionally requires an `admin` role. Mutations append an
+`AdminAudit` row and do not expose private frequency values.

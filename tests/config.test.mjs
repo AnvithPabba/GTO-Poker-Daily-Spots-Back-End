@@ -13,6 +13,7 @@ test("environment validation applies safe development defaults", () => {
     API_PORT: 3000,
     CORS_ORIGIN: "http://localhost:4173",
     DATABASE_URL: validEnvironment.DATABASE_URL,
+    ADMIN_ENABLED: false,
     ADMIN_TRUSTED_PROXY: false,
     GUEST_COOKIE_HASH_SECRET: "local-development-guest-cookie-secret",
     GUEST_COOKIE_NAME: "poker_guest",
@@ -28,6 +29,7 @@ test("environment validation rejects a missing database URL", () => {
 });
 
 test("environment validation parses the trusted admin proxy flag", () => {
-  const config = loadConfig({ DATABASE_URL: "postgresql://localhost/test", ADMIN_TRUSTED_PROXY: "true" });
+  const config = loadConfig({ DATABASE_URL: "postgresql://localhost/test", ADMIN_ENABLED: "true", ADMIN_TRUSTED_PROXY: "true" });
+  assert.equal(config.ADMIN_ENABLED, true);
   assert.equal(config.ADMIN_TRUSTED_PROXY, true);
 });

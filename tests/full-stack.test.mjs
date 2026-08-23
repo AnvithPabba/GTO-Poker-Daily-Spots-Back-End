@@ -26,7 +26,7 @@ test("running Compose stack exposes liveness, readiness, API contract, and no an
   const proxy = await fetch("http://127.0.0.1:4173/api/health/live");
   assert.equal(proxy.status, 200);
   const adminProxy = await fetch("http://127.0.0.1:4173/api/v1/admin/status");
-  assert.equal(adminProxy.status, 200);
+  assert.equal(adminProxy.status, process.env.FULL_STACK_ADMIN === "1" ? 200 : 404);
 });
 
 test("Compose serves today → spot → official attempt → result → practice with stable ownership", { skip: (!enabled || !process.env.DATABASE_URL) && "set FULL_STACK=1 and DATABASE_URL" }, async () => {
