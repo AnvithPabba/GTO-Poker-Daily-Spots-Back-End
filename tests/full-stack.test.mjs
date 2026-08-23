@@ -17,8 +17,9 @@ test("running Compose stack exposes liveness, readiness, API contract, and no an
   assert.equal(apiLive.response.status, 200);
   assert.equal(apiReady.response.status, 200);
   const today = await get("/api/v1/daily-games/today");
-  assert.equal(today.response.status, 200);
-  assert.equal(today.body.timezone, "America/Los_Angeles");
+  assert.ok([200, 404].includes(today.response.status));
+  if (today.response.status === 200) assert.equal(today.body.timezone, "America/Los_Angeles");
+  if (today.response.status === 404) assert.equal(today.body.error.code, "SPOT_NOT_AVAILABLE");
   const serialized = JSON.stringify(today.body);
   assert.doesNotMatch(serialized, /privateSolutionPayload|gtoFrequencies|reachedRanges|reachWeight|frequencies/);
   const frontend = await fetch("http://127.0.0.1:4173/health/live");
@@ -29,7 +30,7 @@ test("running Compose stack exposes liveness, readiness, API contract, and no an
   assert.equal(adminProxy.status, process.env.FULL_STACK_ADMIN === "1" ? 200 : 404);
 });
 
-test("Compose serves today → spot → official attempt → result → practice with stable ownership", { skip: (!enabled || !process.env.DATABASE_URL) && "set FULL_STACK=1 and DATABASE_URL" }, async () => {
+test("Compose serves today → spot → official attempt → result → practice with stable ownership", { skip: (!enabled || !process.env.DATABASE_URL || process.env.FULL_STACK_FIXTURE !== "1") && "set FULL_STACK=1, FULL_STACK_FIXTURE=1, and DATABASE_URL after importing a real spot" }, async () => {
   // Arrange
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdAttemptIds = [];
@@ -71,6 +72,13 @@ test("Compose serves today → spot → official attempt → result → practice
     // Assert
     assert.equal(spot.schemaVersion, 3);
     assert.equal(spot.preflop.status === "known" || spot.preflop.status === "unknown", true);
+    if (spot.preflop.status === "known" && spot.preflop.scenarioId === "2bet_call") {
+      assert.equal(spot.preflop.rangeAssumptions.ip.presetId, "2bet_ip");
+      assert.equal(spot.preflop.rangeAssumptions.oop.presetId, "call_oop");
+      assert.ok(spot.preflop.rangeAssumptions.ip.cells.length > 20);
+      assert.ok(spot.preflop.rangeAssumptions.oop.cells.length > 20);
+      assert.match(spot.preflop.actions[0].label, /opens to [0-9.]+ bb/);
+    }
     assert.doesNotMatch(JSON.stringify(spot), /privateSolutionPayload|gtoBasisPoints|reachedRanges|reachWeight|frequencies/);
     assert.ok(spotResponse.headers.get("etag"));
     assert.ok(spotResponse.headers.get("x-request-id"));

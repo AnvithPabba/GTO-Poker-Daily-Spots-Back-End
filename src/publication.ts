@@ -71,6 +71,29 @@ export async function scheduleSpotVersion(prisma: PrismaClient, versionId: strin
   });
 }
 
+/**
+ * Retarget an already-published slot without mutating its historical version.
+ * The old version is retained as SUPERSEDED and the replacement is scheduled
+ * into the same Pacific date/order for the normal publication transaction.
+ */
+export async function replacePublishedSlot(prisma: PrismaClient, oldVersionId: string, newVersionId: string) {
+  if (oldVersionId === newVersionId) throw new Error("replacement versions must be different");
+  return prisma.$transaction(async (tx) => {
+    const oldVersion = await tx.spotVersion.findUniqueOrThrow({ where: { id: oldVersionId } });
+    const newVersion = await tx.spotVersion.findUniqueOrThrow({ where: { id: newVersionId } });
+    if (oldVersion.spotId !== newVersion.spotId) throw new Error("replacement versions must belong to the same spot");
+    if (oldVersion.status !== SpotVersionStatus.PUBLISHED) throw new Error("old version must be published before replacement");
+    if (newVersion.status !== SpotVersionStatus.APPROVED) throw new Error("replacement version must be approved before replacement");
+    const oldSlot = await tx.publicationSlot.findFirst({ where: { spotVersionId: oldVersionId, status: PublicationSlotStatus.PUBLISHED }, orderBy: { publicationDate: "desc" } });
+    if (!oldSlot) throw new Error("old version has no published slot to replace");
+    await tx.publicationSlot.update({ where: { id: oldSlot.id }, data: { status: PublicationSlotStatus.CANCELLED, cancelledAt: new Date() } });
+    await tx.spotVersion.update({ where: { id: oldVersionId }, data: { status: SpotVersionStatus.SUPERSEDED, supersededAt: new Date() } });
+    const slot = await tx.publicationSlot.create({ data: { publicationDate: oldSlot.publicationDate, slotOrder: oldSlot.slotOrder, spotVersionId: newVersionId, status: PublicationSlotStatus.SCHEDULED } });
+    await tx.spotVersion.update({ where: { id: newVersionId }, data: { status: SpotVersionStatus.SCHEDULED, scheduledAt: new Date() } });
+    return { oldVersionId, newVersionId, slot };
+  });
+}
+
 export async function publishPacificDate(prisma: PrismaClient, publicationDate: string, now = new Date()) {
   assertIsoDate(publicationDate);
   return prisma.$transaction(async (tx) => {

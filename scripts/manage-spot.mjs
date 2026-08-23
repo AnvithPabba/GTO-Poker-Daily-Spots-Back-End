@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createPrismaClient } from "../dist/db.js";
-import { approveSpotVersion, publishPacificDate, scheduleSpotVersion } from "../dist/publication.js";
+import { approveSpotVersion, publishPacificDate, replacePublishedSlot, scheduleSpotVersion } from "../dist/publication.js";
 
 function args(argv) {
   const result = {};
@@ -34,8 +34,12 @@ try {
     if (!options.date) throw new Error("publish requires --date YYYY-MM-DD");
     const published = await publishPacificDate(prisma, options.date, new Date());
     console.log(JSON.stringify({ action: "published", date: options.date, count: published.length, slots: published.map((slot) => slot.id) }, null, 2));
+  } else if (command === "replace") {
+    if (!options["old-version-id"] || !options["new-version-id"]) throw new Error("replace requires --old-version-id and --new-version-id");
+    const result = await replacePublishedSlot(prisma, options["old-version-id"], options["new-version-id"]);
+    console.log(JSON.stringify({ action: "replaced", oldVersionId: result.oldVersionId, newVersionId: result.newVersionId, slotId: result.slot.id, date: result.slot.publicationDate, slotOrder: result.slot.slotOrder, status: result.slot.status }, null, 2));
   } else {
-    throw new Error("usage: manage-spot.mjs approve|schedule|publish [options]");
+    throw new Error("usage: manage-spot.mjs approve|schedule|publish|replace [options]");
   }
 } finally {
   await prisma.$disconnect();

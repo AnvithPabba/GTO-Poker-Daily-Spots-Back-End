@@ -7,7 +7,7 @@ test("native provider envelope is normalized to the public/private application b
   const sourceHash = "c".repeat(64);
   const input = {
     publicPayload: {
-      source: { solveHash: `sha256:${sourceHash}`, configurationHash: "d".repeat(64), pathManifest: { steps: [{ kind: "action", solverLabel: "BET 25.000000" }] } },
+      source: { solveHash: `sha256:${sourceHash}`, configurationHash: `sha256:${"d".repeat(64)}`, pathManifest: { steps: [{ kind: "action", solverLabel: "BET 25.000000" }] } },
       preflop: {
         status: "known", scenarioId: "3bet_call", label: "3-bet pot", summary: "SB 3-bets and BTN calls.",
         actions: [{ sequence: 1, actor: "oop", position: "SB", type: "three_bet", amountBb: 10, label: "SB 3-bets to 10 bb" }],

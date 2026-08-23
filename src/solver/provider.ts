@@ -107,9 +107,14 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const providerPublic = root.publicPayload as Record<string, unknown>;
   const source = publicSource as Record<string, unknown>;
   const sourceHash = sourceHashFromProvider(source);
-  const configurationHash = typeof source.configurationHash === "string" && hashPattern.test(source.configurationHash)
-    ? source.configurationHash
-    : undefined;
+  const rawConfigurationHash = source.configurationHash;
+  let configurationHash: string | undefined;
+  if (rawConfigurationHash !== undefined) {
+    if (typeof rawConfigurationHash !== "string") throw new Error("provider configurationHash must be a sha256 hash");
+    const normalizedConfigurationHash = rawConfigurationHash.startsWith("sha256:") ? rawConfigurationHash.slice(7) : rawConfigurationHash;
+    if (!hashPattern.test(normalizedConfigurationHash)) throw new Error("provider configurationHash must be sha256:<64 lowercase hex> or 64 lowercase hex");
+    configurationHash = normalizedConfigurationHash;
+  }
   const spotId = typeof providerPublic.spotId === "string" ? providerPublic.spotId : options.spotId;
   const publicationDate = typeof providerPublic.publicationDate === "string" ? providerPublic.publicationDate : options.publicationDate;
   if (!spotId) throw new Error("spot ID is required (--spot-id)");

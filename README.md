@@ -107,18 +107,25 @@ cp ../.env.example ../.env
 docker compose -f ../docker-compose.yml up -d --build
 ```
 
-For a new local volume, apply the schema and seed the safe synthetic browser
-spot with the development superuser (never with `trainer_api` or
-`solver_worker`):
+For a new local volume, apply the schema with the development superuser (never
+with `trainer_api` or `solver_worker`):
 
 ```bash
 DATABASE_URL='postgresql://postgres:replace-with-a-local-development-secret@127.0.0.1:55432/poker_trainer_dev' pnpm db:migrate
 DATABASE_URL='postgresql://postgres:replace-with-a-local-development-secret@127.0.0.1:55432/poker_trainer_dev' pnpm db:seed
 ```
 
-`db:seed` is idempotent and creates only a synthetic local challenge. It is
-not a source of production GTO content; use the private normalized-solver
-ingestion procedure below for real spots.
+`db:seed` is intentionally content-free and idempotent. It does not create a
+synthetic challenge or pretend that a solver answer exists. Import a real
+provider envelope with the procedure in `docs/spot-ingestion.md` before the
+daily page can show a spot.
+
+If a development volume was created by an older revision and still contains
+the retired `development-default-spot`, run
+`DATABASE_URL='postgresql://postgres:<password>@127.0.0.1:55432/poker_trainer_dev' pnpm spot:retire-synthetic` once. It cancels its publication
+slots and marks its versions superseded while preserving old attempts and
+payloads for audit; it does not run in production and is unnecessary on a
+fresh volume.
 
 The native Mac worker must use the host-published database endpoint:
 
@@ -148,10 +155,12 @@ corepack pnpm spot:manage -- schedule ...
 corepack pnpm spot:manage -- publish ...
 ```
 
-`spot:ingest` accepts the private `provider-envelope.json` emitted by the
-private Solver selector, converts it to the versioned application envelope,
-and stores public and private JSON in separate `SpotVersion` columns. It does
-not publish automatically.
+`spot:ingest` accepts the private `provider-envelope.json` and its sibling
+`configuration.json` emitted by the private Solver selector, converts them to
+the versioned application envelope, verifies the configuration hash and input
+ranges, and stores public and private JSON in separate `SpotVersion` columns.
+It does not publish automatically. The browser and normal API requests never
+read the Solver repository or `SolverOutputs`.
 
 ## Public resource flow, accounts, and local administration
 
