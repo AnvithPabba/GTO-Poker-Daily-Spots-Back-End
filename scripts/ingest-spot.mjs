@@ -34,7 +34,11 @@ const archiveRoot = resolve(options["archive-root"] ?? process.env.SOLVER_OUTPUT
 
 try {
   const inputPath = resolve(options.input);
-  const provenancePath = resolve(options.provenance ?? dirname(inputPath), "configuration.json");
+  // An explicit --provenance is a file path. When it is omitted, use the
+  // configuration.json emitted beside the native input artifact.
+  const provenancePath = options.provenance
+    ? resolve(options.provenance)
+    : resolve(dirname(inputPath), "configuration.json");
   const provenance = await readJson(provenancePath);
   const config = provenance.authoredConfig ?? provenance;
   const input = await read(options.input);
