@@ -1,12 +1,7 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { createPrismaClient } from "../dist/db.js";
-import { createSolverTemplate } from "../dist/solver/template.js";
-import { archiveRun, verifyArchive } from "../dist/solver/archive.js";
-import { persistValidatedDraft } from "../dist/solver/pipeline.js";
-import { normalizeProviderEnvelope } from "../dist/solver/provider.js";
-import { assertImportProvenance } from "../dist/solver/import-provenance.js";
+import { ingestSpot } from "../dist/solver/ingest.js";
 
 function args(argv) {
   const result = {};
@@ -26,62 +21,29 @@ for (const required of ["envelope", "input", "output", "log", "title"]) {
 }
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 
-const readJson = async (file) => JSON.parse(await readFile(resolve(file), "utf8"));
-const read = async (file) => readFile(resolve(file));
-
 const prisma = createPrismaClient(process.env.DATABASE_URL);
 const archiveRoot = resolve(options["archive-root"] ?? process.env.SOLVER_OUTPUTS_DIR ?? "../../SolverOutputs");
 
 try {
-  const inputPath = resolve(options.input);
-  // An explicit --provenance is a file path. When it is omitted, use the
-  // configuration.json emitted beside the native input artifact.
-  const provenancePath = options.provenance
-    ? resolve(options.provenance)
-    : resolve(dirname(inputPath), "configuration.json");
-  const provenance = await readJson(provenancePath);
-  const config = provenance.authoredConfig ?? provenance;
-  const input = await read(options.input);
-  const output = await read(options.output);
-  const log = await read(options.log);
-  const rawEnvelope = await readJson(options.envelope);
-  assertImportProvenance(rawEnvelope, provenance, input.toString("utf8"));
   const familyId = options.family ?? `manual-${Date.now()}`;
-  const latest = await prisma.solverTemplate.findFirst({ where: { familyId }, orderBy: { version: "desc" }, select: { version: true } });
-  const template = await createSolverTemplate(prisma, { familyId, version: (latest?.version ?? 0) + 1, name: options["template-name"] ?? options.title, config });
-  const job = await prisma.solverJob.create({ data: { templateId: template.id, effectiveSeed: options.seed ?? `${familyId}:${template.version}` } });
-  const archived = await archiveRun(archiveRoot, [
-    { name: "input.txt", content: input },
-    { name: "output_result.json", content: output },
-    { name: "solver.log", content: log },
-  ]);
-  const archivedWithMetadata = await archiveRun(archiveRoot, [
-    { name: "input.txt", content: input },
-    { name: "output_result.json", content: output },
-    { name: "solver.log", content: log },
-    { name: "metadata.json", content: JSON.stringify({ sourceHash: archived.sourceHash, templateId: template.id, jobId: job.id }, null, 2) },
-  ]);
-  await verifyArchive(archiveRoot, archivedWithMetadata);
-  const envelope = normalizeProviderEnvelope(rawEnvelope, {
+  const result = await ingestSpot(prisma, {
+    envelopePath: options.envelope,
+    inputPath: options.input,
+    outputPath: options.output,
+    logPath: options.log,
+    ...(options.provenance ? { provenancePath: options.provenance } : {}),
+    archiveRoot,
+    title: options.title,
+    familyId,
+    ...(options["template-name"] ? { templateName: options["template-name"] } : {}),
+    ...(options.seed ? { seed: options.seed } : {}),
     ...(options["spot-id"] ? { spotId: options["spot-id"] } : {}),
     ...(options["spot-version-id"] ? { spotVersionId: options["spot-version-id"] } : {}),
     ...(options["publication-date"] ? { publicationDate: options["publication-date"] } : {}),
     ...(options["slot-order"] ? { slotOrder: Number(options["slot-order"]) } : {}),
     ...(options["initial-actor"] ? { initialActor: options["initial-actor"] } : {}),
   });
-  const result = await persistValidatedDraft(prisma, {
-    jobId: job.id,
-    attemptNumber: 1,
-    resolvedInput: provenance,
-    inputSha256: archived.artifacts["input.txt"].sha256,
-    outputSha256: archived.artifacts["output_result.json"].sha256,
-    logSha256: archived.artifacts["solver.log"].sha256,
-    archiveInputKey: archived.artifacts["input.txt"].key,
-    archiveOutputKey: archived.artifacts["output_result.json"].key,
-    archiveLogKey: archived.artifacts["solver.log"].key,
-    archiveMetadataKey: `solver-runs/sha256/${archived.sourceHash}/metadata.json`,
-  }, envelope, { title: options.title });
-  console.log(JSON.stringify({ templateId: template.id, jobId: job.id, solverRunId: result.run.id, spotId: result.spot.id, spotVersionId: result.version.id, status: result.version.status }, null, 2));
+  console.log(JSON.stringify({ templateId: result.templateId, jobId: result.jobId, solverRunId: result.solverRunId, spotId: result.spotId, spotVersionId: result.spotVersionId, status: result.status }, null, 2));
 } finally {
   await prisma.$disconnect();
 }

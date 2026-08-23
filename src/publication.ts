@@ -26,6 +26,24 @@ export function addPacificDays(date: string, days: number): string {
   return result.toISOString().slice(0, 10);
 }
 
+/**
+ * Return the first unoccupied Pacific calendar date at or after `startDate`.
+ *
+ * Publication slots are the source of truth for coverage.  Keeping this as a
+ * pure helper makes the append-to-calendar policy deterministic and easy to
+ * test; the caller is responsible for reading occupied dates in a transaction
+ * and handling a unique-key race when multiple operators publish at once.
+ */
+export function nextAvailablePacificDate(startDate: string, occupiedDates: Iterable<string>): string {
+  assertIsoDate(startDate);
+  const occupied = new Set(occupiedDates);
+  for (let offset = 0; offset <= 3660; offset += 1) {
+    const candidate = addPacificDays(startDate, offset);
+    if (!occupied.has(candidate)) return candidate;
+  }
+  throw new Error("no available publication date in the next ten years");
+}
+
 export function pacificMidnightUtc(date: string): Date {
   assertIsoDate(date);
   const [year, month, day] = date.split("-").map(Number);

@@ -63,6 +63,32 @@ development database is intentional.
 
 ## 3. Import a selected spot
 
+### Recommended: one command from `Solver`
+
+The Solver authoring command combines the native solve, interactive path
+selection, export, validated import, approval, and scheduling:
+
+```bash
+cd ../../Solver
+python3 texassolver_tech_demo.py \
+  --config configs/2bet-pot-100bb.json \
+  --publish \
+  --spot-name "Single-raised pot flop decision"
+```
+
+After you type `export`, the backend assigns slot 1 on the first unoccupied
+Pacific date starting tomorrow. Repeat the command to append the next spot to
+the next free date. Existing scheduled/published dates are never overwritten.
+The command derives a host-side `DATABASE_URL` from `webapp/.env` when one is
+not already exported; set `DATABASE_URL` explicitly for another database.
+
+If the import fails, the raw solve and exported bundle remain available and no
+publication slot is created. Fix the reported database/configuration issue
+and rerun the command with the retained bundle using the manual workflow
+below.
+
+### Manual/import-only workflow
+
 The ingestion command creates a versioned template, solver job, raw archive,
 successful solver run, draft `Spot`, and validated `SpotVersion` in one
 transactional application boundary. It verifies the archive checksums and

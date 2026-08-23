@@ -147,6 +147,25 @@ storage boundary.
 Use the complete authoring/import/approval/schedule/publish procedure in
 [`docs/spot-ingestion.md`](docs/spot-ingestion.md). The short version is:
 
+From the private `Solver` directory, the recommended single command is:
+
+```bash
+python3 texassolver_tech_demo.py \
+  --config configs/2bet-pot-100bb.json \
+  --publish \
+  --spot-name "Single-raised pot flop decision"
+```
+
+It pauses for the numbered selector and only continues after `export`. The
+backend then validates/imports the bundle, approves it, and assigns slot 1 on
+the first free Pacific date starting tomorrow. Repeating it appends the next
+spot; cancelling before export or a failed import leaves no publication slot.
+The command uses `DATABASE_URL`, or derives the host-side Docker URL from
+`webapp/.env`.
+
+The equivalent manual commands remain available for operators who need to
+inspect each lifecycle transition:
+
 ```bash
 corepack pnpm db:migrate                 # superuser, once per database
 corepack pnpm spot:ingest -- ...         # creates validated draft + archive
