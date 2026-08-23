@@ -84,8 +84,27 @@ not already exported; set `DATABASE_URL` explicitly for another database.
 
 If the import fails, the raw solve and exported bundle remain available and no
 publication slot is created. Fix the reported database/configuration issue
-and rerun the command with the retained bundle using the manual workflow
-below.
+and rerun the publication handoff with the retained bundle (this does not
+rerun TexasSolver):
+
+```bash
+cd webapp/backend
+DATABASE_URL='postgresql://trainer_api:<app-password>@127.0.0.1:55432/poker_trainer_dev' \
+  SOLVER_OUTPUTS_DIR='../../SolverOutputs' \
+  corepack pnpm spot:publish -- \
+    --envelope '../../SolverOutputs/<solve-sha>/spots/<spot-id>/provider-envelope.json' \
+    --input '../../SolverOutputs/<solve-sha>/input.txt' \
+    --output '../../SolverOutputs/<solve-sha>/output_result.json' \
+    --log '../../SolverOutputs/<solve-sha>/solver.log' \
+    --provenance '../../SolverOutputs/<solve-sha>/configuration.json' \
+    --title 'IP flop response on Qs Jh 2h' \
+    --family 'srp-default' \
+    --spot-id '<spot-id>' \
+    --spot-version-id '<spot-id>_v1'
+```
+
+The retry is idempotent for an already scheduled version: it reports the
+existing slot rather than creating a duplicate.
 
 ### Manual/import-only workflow
 
