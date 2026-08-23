@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { createPublicApiRouter } from "../dist/api.js";
 import { pacificDate, addPacificDays } from "../dist/publication.js";
 import { payloadSha256 } from "../dist/solver/normalized.js";
+import { PublicApplicationService } from "../dist/application/public-api.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -18,8 +19,9 @@ test("public API serves immutable public spots and scores one official then prac
   const publicationDate = addPacificDays(pacificDate(), -1);
   const sourceHash = "d".repeat(64);
   const publicPayload = {
-    schemaVersion: 2, spotId: ids.spot, spotVersionId: ids.version, publicationDate, slotOrder: 1,
-    initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [],
+    schemaVersion: 3, spotId: ids.spot, spotVersionId: ids.version, publicationDate, slotOrder: 1,
+    preflop: { status: "known", scenarioId: "2bet_call", label: "BTN opens, BB calls", summary: "Single-raised pot.", actions: [{ sequence: 1, actor: "ip", position: "BTN", type: "open", amountBb: 2.5, label: "BTN opens to 2.5 bb" }, { sequence: 2, actor: "oop", position: "BB", type: "call", amountBb: 2.5, label: "BB calls" }], rangeAssumptions: { ip: { presetId: "open_ip", label: "IP opening range", cells: [{ handClass: "AA", inclusionBasisPoints: 10000 }] }, oop: { presetId: "call_oop", label: "OOP calling range", cells: [{ handClass: "KQs", inclusionBasisPoints: 7500 }] } } },
+    initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [{ kind: "decision", actor: "oop" }],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
     legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
@@ -34,7 +36,7 @@ test("public API serves immutable public spots and scores one official then prac
     await prisma.publicationSlot.create({ data: { id: `${suffix}_slot`, publicationDate: new Date(`${publicationDate}T00:00:00.000Z`), slotOrder: 1, spotVersionId: ids.version, status: "PUBLISHED", publishedAt: new Date(), updatedAt: new Date() } });
 
     const app = express();
-    app.use("/api/v1", createPublicApiRouter({ prisma, guestCookieHashSecret: "integration-test-secret", guestCookieName: "integration_guest", secureCookies: false }));
+    app.use("/api/v1", createPublicApiRouter({ application: new PublicApplicationService(prisma), prisma, guestCookieHashSecret: "integration-test-secret", guestCookieName: "integration_guest", secureCookies: false }));
     server = createServer(app);
     await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
     const address = server.address();
@@ -56,43 +58,56 @@ test("public API serves immutable public spots and scores one official then prac
     assert.ok(etag);
     assert.equal((await fetch(`${base}/api/v1/spots/${ids.spot}`, { headers: { "if-none-match": etag } })).status, 304);
 
-    const today = await fetch(`${base}/api/v1/spots/today`);
+    const today = await fetch(`${base}/api/v1/daily-games/today`);
     const todayBody = await today.json();
     assert.equal(today.status, 200);
-    assert.equal(todayBody.isFallback, true);
-    assert.equal(todayBody.fallbackFromDate, publicationDate);
-    assert.match(today.headers.get("cache-control") ?? "", /public/);
+    assert.equal(todayBody.fallback.active, true);
+    assert.equal(todayBody.date, publicationDate);
+    assert.match(today.headers.get("cache-control") ?? "", /private/);
     assert.match(today.headers.get("vary") ?? "", /Cookie/);
 
-    const request = { spotVersionId: ids.version, idempotencyKey: `${suffix}_idempotency_1`, hands: [{ combo: "AhAs", allocations: { a0: 5_000, a1: 5_000 } }] };
-    const first = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
+    const request = { spotVersionId: ids.version, hands: [{ combo: "AhAs", allocations: { a0: 5_000, a1: 5_000 } }] };
+    const firstKey = `${suffix}_idempotency_1`;
+    const first = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": firstKey }, body: JSON.stringify(request) });
     assert.equal(first.status, 201);
     const firstBody = await first.json();
-    assert.equal(firstBody.official, true);
+    assert.equal(firstBody.attemptKind, "official");
+    assert.equal(firstBody.score.points, 750);
+    assert.equal(first.headers.get("location"), `/api/v1/attempts/${firstBody.attemptId}`);
     assert.match(first.headers.get("set-cookie") ?? "", /HttpOnly/);
     const cookie = first.headers.get("set-cookie")?.split(";", 1)[0];
-    const retry = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(request) });
-    assert.equal(retry.status, 200);
+    const retry = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": firstKey, cookie }, body: JSON.stringify(request) });
+    assert.equal(retry.status, 201);
     assert.equal((await retry.json()).attemptId, firstBody.attemptId);
-    const practice = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ ...request, idempotencyKey: `${suffix}_idempotency_2` }) });
+    const practice = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": `${suffix}_idempotency_2`, cookie }, body: JSON.stringify(request) });
     assert.equal(practice.status, 201);
-    assert.equal((await practice.json()).official, false);
+    assert.equal((await practice.json()).attemptKind, "practice");
     assert.equal(await prisma.attempt.count({ where: { spotVersionId: ids.version } }), 2);
-    const archive = await fetch(`${base}/api/v1/spots/archive?limit=10`, { headers: { cookie } });
+    const result = await fetch(`${base}/api/v1/attempts/${firstBody.attemptId}`, { headers: { cookie } });
+    assert.equal(result.status, 200);
+    const resultBody = await result.json();
+    assert.equal(resultBody.hands[0].actions[0].gtoBasisPoints, 2500);
+    assert.equal(resultBody.attemptKind, "official");
+
+    const archive = await fetch(`${base}/api/v1/daily-games?from=${publicationDate}&to=${publicationDate}`, { headers: { cookie } });
     assert.equal(archive.status, 200);
-    const archiveEtag = archive.headers.get("etag");
-    assert.ok(archiveEtag);
-    assert.equal((await fetch(`${base}/api/v1/spots/archive?limit=10`, { headers: { cookie, "if-none-match": archiveEtag } })).status, 304);
+    assert.match(archive.headers.get("cache-control") ?? "", /private/);
     const archiveBody = await archive.json();
-    assert.equal(archiveBody.spots.find((spot) => spot.spotVersionId === ids.version)?.completed, true);
-    const completedToday = await fetch(`${base}/api/v1/spots/today`, { headers: { cookie } });
+    assert.equal(archiveBody.games[0].completedSpots, 1);
+    const completedToday = await fetch(`${base}/api/v1/daily-games/today`, { headers: { cookie } });
     const completedTodayBody = await completedToday.json();
     assert.equal(completedTodayBody.spots.find((spot) => spot.spotVersionId === ids.version)?.completed, true);
+    const stats = await fetch(`${base}/api/v1/users/me/stats`, { headers: { cookie } });
+    assert.equal(stats.status, 200);
+    assert.equal((await stats.json()).spotsCompleted, 1);
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
-    const guestIds = (await prisma.attempt.findMany({ where: { spotVersionId: ids.version }, select: { guestSessionId: true } })).map((attempt) => attempt.guestSessionId);
+    const owners = await prisma.attempt.findMany({ where: { spotVersionId: ids.version }, select: { guestSessionId: true, guestIdentityId: true } });
+    const guestIds = owners.map((attempt) => attempt.guestSessionId).filter(Boolean);
+    const identityIds = owners.map((attempt) => attempt.guestIdentityId).filter(Boolean);
     await prisma.attempt.deleteMany({ where: { spotVersionId: ids.version } });
     if (guestIds.length) await prisma.guestSession.deleteMany({ where: { id: { in: guestIds } } });
+    if (identityIds.length) await prisma.guestIdentity.deleteMany({ where: { id: { in: identityIds } } });
     await prisma.publicationSlot.deleteMany({ where: { spotVersionId: ids.version } });
     await prisma.spotVersion.deleteMany({ where: { id: ids.version } });
     await prisma.spot.deleteMany({ where: { id: ids.spot } });

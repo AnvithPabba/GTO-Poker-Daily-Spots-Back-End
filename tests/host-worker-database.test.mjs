@@ -17,8 +17,8 @@ test("host-worker leases, heartbeats, retries, and terminal completion are owner
   try {
     await prisma.solverTemplate.create({ data: { id: templateId, familyId: suffix, version: 1, name: "lease test", config: { pot: 50, effective_stack: 100, board: ["Qs", "Jh", "2h"], ranges: { ip: "AA", oop: "KK" } }, updatedAt: start } });
     await prisma.solverJob.createMany({ data: [
-      { id: retryJobId, templateId, effectiveSeed: `${suffix}:retry`, priority: 10, maxAttempts: 3, updatedAt: start },
-      { id: completeJobId, templateId, effectiveSeed: `${suffix}:complete`, maxAttempts: 3, updatedAt: start },
+      { id: retryJobId, templateId, effectiveSeed: `${suffix}:retry`, priority: 1_000_000, maxAttempts: 3, nextAttemptAt: start, updatedAt: start },
+      { id: completeJobId, templateId, effectiveSeed: `${suffix}:complete`, priority: 999_999, maxAttempts: 3, nextAttemptAt: start, updatedAt: start },
     ] });
 
     const first = await claimSolverJob(prisma, "worker-a", start, 60_000);

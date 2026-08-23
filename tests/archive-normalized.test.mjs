@@ -11,11 +11,12 @@ const sourceHash = "a".repeat(64);
 
 function envelope(overrides = {}) {
   const publicPayload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     spotId: "unit_spot_001",
     spotVersionId: "unit_spot_001_v1",
     publicationDate: "2026-08-19",
     slotOrder: 1,
+    preflop: { status: "unknown", label: "Preflop start unavailable", summary: "Legacy fixture." },
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
     history: [],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
@@ -28,7 +29,7 @@ function envelope(overrides = {}) {
     presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sourceHash,
     publicPayload,
     privateSolutionPayload: {

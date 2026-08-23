@@ -7,7 +7,15 @@ test("native provider envelope is normalized to the public/private application b
   const sourceHash = "c".repeat(64);
   const input = {
     publicPayload: {
-      source: { solveHash: `sha256:${sourceHash}`, pathManifest: { steps: [{ kind: "action", solverLabel: "BET 25.000000" }] } },
+      source: { solveHash: `sha256:${sourceHash}`, configurationHash: "d".repeat(64), pathManifest: { steps: [{ kind: "action", solverLabel: "BET 25.000000" }] } },
+      preflop: {
+        status: "known", scenarioId: "3bet_call", label: "3-bet pot", summary: "SB 3-bets and BTN calls.",
+        actions: [{ sequence: 1, actor: "oop", position: "SB", type: "three_bet", amountBb: 10, label: "SB 3-bets to 10 bb" }],
+        rangeAssumptions: {
+          ip: { presetId: "call_3bet_ip", label: "IP calling range", cells: [{ handClass: "99", inclusionBasisPoints: 7500 }] },
+          oop: { presetId: "3bet_oop", label: "OOP 3-bet range", cells: [{ handClass: "AA", inclusionBasisPoints: 10000 }] },
+        },
+      },
       initialState: { pot: 50, effectiveStack: 100, board: ["Qs", "Jh", "2h"] },
       history: [{ kind: "action", actor: "oop", actionType: "bet", solverLabel: "BET 25.000000", amount: 25 }],
       decision: { street: "flop", board: ["Qs", "Jh", "2h"], actor: "ip", pot: 75, stacks: { ip: 100, oop: 75 }, allIn: { ip: false, oop: false } },
@@ -29,6 +37,10 @@ test("native provider envelope is normalized to the public/private application b
   };
   const normalized = normalizeProviderEnvelope(input, { spotId: "provider_spot_1", publicationDate: "2026-08-20" });
   assert.equal(normalized.publicPayload.spotId, "provider_spot_1");
+  assert.equal(normalized.schemaVersion, 3);
+  assert.equal(normalized.publicPayload.preflop.status, "known");
+  assert.equal(normalized.publicPayload.history.at(-1).kind, "decision");
+  assert.equal(normalized.provenance.configurationHash, "d".repeat(64));
   assert.equal(normalized.publicPayload.legalActions[1].type, "bet");
   assert.equal(normalized.privateSolutionPayload.byCombo.AhAs.frequencies.a1, 7_000);
   assert.equal(normalized.privateSolutionPayload.actionOrder.length, 3);

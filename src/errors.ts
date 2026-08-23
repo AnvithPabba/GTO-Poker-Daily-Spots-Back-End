@@ -1,7 +1,10 @@
-export type ErrorCode = "BAD_REQUEST" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "RATE_LIMITED" | "UNAVAILABLE" | "INTERNAL";
+import type { z } from "zod";
+import { apiErrorCodeSchema } from "@poker-trainer/contracts";
+
+export type ErrorCode = z.infer<typeof apiErrorCodeSchema>;
 
 export class AppError extends Error {
-  public constructor(public readonly code: ErrorCode, message: string, public readonly status: 400 | 401 | 403 | 404 | 409 | 429 | 503 | 500, public readonly issues?: Array<{ path: Array<string | number>; message: string }>) {
+  public constructor(public readonly code: ErrorCode, message: string, public readonly status: 400 | 401 | 403 | 404 | 409 | 429 | 503 | 500, public readonly details?: Record<string, unknown>) {
     super(message);
     this.name = "AppError";
   }
@@ -9,5 +12,5 @@ export class AppError extends Error {
 
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
-  return new AppError("INTERNAL", error instanceof Error ? error.message : "unexpected server error", 500);
+  return new AppError("INTERNAL", "request failed", 500);
 }

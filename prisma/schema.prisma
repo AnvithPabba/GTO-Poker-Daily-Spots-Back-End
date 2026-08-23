@@ -166,7 +166,7 @@ model SpotVersion {
   candidateManifest       Json
   publicPayload           Json
   privateSolutionPayload  Json
-  schemaVersion           Int               @default(2)
+  schemaVersion           Int               @default(3)
   normalizerVersion       String
   selectionRankingVersion String
   publicPayloadSha256     String
@@ -212,6 +212,7 @@ model PublicationSlot {
 
 model GuestSession {
   id            String    @id @default(cuid())
+  identityId    String
   tokenHash     String    @unique
   createdAt     DateTime  @default(now())
   lastSeenAt    DateTime  @default(now())
@@ -220,9 +221,19 @@ model GuestSession {
   rotationOfId  String?
   abuseMetadata Json?
 
+  identity GuestIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
   attempts Attempt[]
 
   @@index([expiresAt, revokedAt])
+  @@index([identityId, createdAt])
+}
+
+model GuestIdentity {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sessions GuestSession[]
+  attempts Attempt[]
 }
 
 model Account {
@@ -237,44 +248,51 @@ model Account {
 }
 
 model Attempt {
-  id                String   @id @default(cuid())
-  guestSessionId    String?
-  accountId         String?
-  spotId            String
-  spotVersionId     String
-  official          Boolean  @default(false)
-  practiceOrdinal   Int      @default(0)
-  idempotencyKey    String
-  submittedPayload  Json
-  resultPayload     Json
-  overallSimilarity Float
-  metricKey         String
-  metricVersion     Int
-  aggregatorKey     String
-  aggregatorVersion Int
-  createdAt         DateTime @default(now())
-  requestMetadata   Json?
+  id                     String   @id @default(cuid())
+  guestSessionId         String?
+  guestIdentityId        String?
+  accountId              String?
+  spotId                 String
+  spotVersionId          String
+  official               Boolean  @default(false)
+  practiceOrdinal        Int      @default(0)
+  idempotencyKey         String
+  idempotencyPayloadHash String   @default("")
+  submittedPayload       Json
+  resultPayload          Json
+  overallSimilarity      Float
+  similarityBasisPoints  Int      @default(0)
+  scorePoints            Int      @default(0)
+  metricKey              String
+  metricVersion          Int
+  aggregatorKey          String
+  aggregatorVersion      Int
+  createdAt              DateTime @default(now())
+  requestMetadata        Json?
 
-  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
-  account      Account?      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  spot         Spot          @relation(fields: [spotId], references: [id], onDelete: Restrict)
-  spotVersion  SpotVersion   @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
+  guestSession  GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+  guestIdentity GuestIdentity? @relation(fields: [guestIdentityId], references: [id], onDelete: Restrict)
+  account       Account?       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  spot          Spot           @relation(fields: [spotId], references: [id], onDelete: Restrict)
+  spotVersion   SpotVersion    @relation(fields: [spotVersionId], references: [id], onDelete: Restrict)
 
   @@unique([guestSessionId, spotVersionId, idempotencyKey])
+  @@unique([guestIdentityId, spotVersionId, idempotencyKey])
   @@unique([accountId, spotVersionId, idempotencyKey])
   @@index([guestSessionId, createdAt])
+  @@index([guestIdentityId, createdAt])
   @@index([accountId, createdAt])
   @@index([spotVersionId, createdAt])
   @@index([spotId, createdAt])
 }
 
 model AdminAudit {
-  id          String   @id @default(cuid())
-  actor       String?
-  operation   String
-  targetId    String
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  actor     String?
+  operation String
+  targetId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
 
   @@index([targetId, createdAt])
   @@index([operation, createdAt])

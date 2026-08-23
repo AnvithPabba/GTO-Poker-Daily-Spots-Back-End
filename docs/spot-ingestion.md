@@ -29,6 +29,12 @@ directory is:
 frequencies and reached ranges and must never be copied to the frontend or
 returned by a public API.
 
+The run root also contains `configuration.json`, which records the canonical
+resolved hand config, selected range scenario, literal IP/OOP ranges passed to
+TexasSolver, and a deterministic configuration hash separate from the raw
+artifact hash. Ingestion validates this provenance and copies only the public
+preflop story and hand-class assumptions into the v3 public payload.
+
 ## 2. Apply the database migration once
 
 The development migration is run by the database superuser, not either runtime
@@ -108,19 +114,26 @@ keyed and runs in a transaction; duplicate date/order or active-version slots
 are rejected by PostgreSQL. The API serves the latest previous publication with
 an explicit fallback flag if today has no published slot.
 
+For immutable legacy v2 versions, run `corepack pnpm spot:migrate-v3` with the
+application `DATABASE_URL`. It creates new v3 versions and retargets mutable
+spot/slot references without editing v2 JSON. Missing legacy scenario
+provenance is labeled `Preflop start unavailable` rather than inferred.
+
 ## 5. Verify the public boundary
 
 ```bash
-curl http://127.0.0.1:3000/api/v1/spots/today
+curl http://127.0.0.1:3000/api/v1/daily-games/today
 curl http://127.0.0.1:3000/api/v1/spots/srp_qs_jh_2h_ip_response
 ```
 
-The public GET contains hand history, state, the featured combo/range options,
+The public GET contains preflop assumptions, hand history, state, the featured combo/range options,
 and legal actions only. It must not contain `privateSolutionPayload`,
 `frequencies`, `reachedRanges`, or `reachWeight`. GTO percentages are read only
-inside `POST /api/v1/spots/:spotId/attempts` and returned after a valid
-submission. The first accepted guest attempt is official; retries are practice
-attempts and idempotency keys return the stored result.
+inside the attempt service. The POST returns an attempt ID and compact score;
+`GET /api/v1/attempts/:attemptId` returns the ownership-checked comparison.
+The first accepted attempt per stable guest/account and spot version is
+official; later attempts are practice. The `Idempotency-Key` header returns the
+original attempt for an identical retry and `409` for different content.
 
 ## Failure and recovery rules
 

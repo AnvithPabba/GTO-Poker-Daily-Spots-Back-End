@@ -8,13 +8,14 @@ import { ensureQueueSchedules, replenishmentPlan } from "../dist/queue.js";
 
 function candidate(id, street, actor, reach, frequencies) {
   const publicPayload = {
-    schemaVersion: 2, spotId: `candidate_${id}`, spotVersionId: `candidate_${id}_v1`, publicationDate: "2026-08-19", slotOrder: 1,
+    schemaVersion: 3, spotId: `candidate_${id}`, spotVersionId: `candidate_${id}_v1`, publicationDate: "2026-08-19", slotOrder: 1,
+    preflop: { status: "unknown", label: "Preflop start unavailable", summary: "Legacy fixture." },
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street, actor, allIn: { ip: false, oop: false } },
     legalActions: [{ id: "a0", type: "check", displayLabel: "Check", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
   const sourceHash = id.repeat(64).slice(0, 64);
-  return validateNormalizedEnvelope({ schemaVersion: 2, sourceHash, publicPayload, privateSolutionPayload: { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: reach, frequencies } }, reachedRanges: { hero: {}, opponent: {} } }, candidateManifest: { sourceHash, path: [id], selectedCombo: "AhAs", fallbackUsed: false, rankingVersion: "1" }, provenance: { normalizerVersion: "2", selectionRankingVersion: "1" } });
+  return validateNormalizedEnvelope({ schemaVersion: 3, sourceHash, publicPayload, privateSolutionPayload: { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: reach, frequencies } }, reachedRanges: { hero: {}, opponent: {} } }, candidateManifest: { sourceHash, path: [id], selectedCombo: "AhAs", fallbackUsed: false, rankingVersion: "1" }, provenance: { normalizerVersion: "3", selectionRankingVersion: "1" } });
 }
 
 test("template config and retry policy are deterministic", () => {

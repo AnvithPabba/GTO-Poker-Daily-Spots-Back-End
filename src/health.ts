@@ -35,11 +35,13 @@ export function createHealthApp({ pool, service, corsOrigin }: HealthOptions): E
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "same-origin");
     response.setHeader("X-Frame-Options", "DENY");
+    response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     response.setHeader("Vary", "Origin");
     response.setHeader("Access-Control-Allow-Origin", corsOrigin);
     response.setHeader("Access-Control-Allow-Credentials", "true");
     response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Accept,Content-Type,If-None-Match,X-Request-ID");
+    response.setHeader("Access-Control-Allow-Headers", "Accept,Authorization,Content-Type,Idempotency-Key,If-None-Match,X-Request-ID");
     next();
   });
 

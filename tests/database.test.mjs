@@ -9,7 +9,7 @@ test("database schema, roles, immutability, and singleton constraints", { skip: 
   const client = await pool.connect();
   const suffix = `test_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
   const ids = {
-    template: `${suffix}_template`, job: `${suffix}_job`, run: `${suffix}_run`, spot: `${suffix}_spot`, version: `${suffix}_version`, guest: `${suffix}_guest`, attempt: `${suffix}_attempt`,
+    template: `${suffix}_template`, job: `${suffix}_job`, run: `${suffix}_run`, spot: `${suffix}_spot`, version: `${suffix}_version`, identity: `${suffix}_identity`, guest: `${suffix}_guest`, attempt: `${suffix}_attempt`,
   };
   const publicPayload = JSON.stringify({ schemaVersion: 2, spotId: ids.spot, spotVersionId: ids.version });
   try {
@@ -19,10 +19,11 @@ test("database schema, roles, immutability, and singleton constraints", { skip: 
     await client.query(`INSERT INTO "SolverRun" (id, "jobId", "attemptNumber", status, "resolvedInput") VALUES ($1, $2, 1, 'SUCCEEDED', '{}'::jsonb)`, [ids.run, ids.job]);
     await client.query(`INSERT INTO "Spot" (id, title, "updatedAt") VALUES ($1, 'database test', now())`, [ids.spot]);
     await client.query(`INSERT INTO "SpotVersion" (id, "spotId", version, "solverRunId", "candidateManifest", "publicPayload", "privateSolutionPayload", "normalizerVersion", "selectionRankingVersion", "publicPayloadSha256", "privatePayloadSha256", status) VALUES ($1, $2, 1, $3, '{}'::jsonb, $4::jsonb, '{}'::jsonb, '1', '1', 'public-hash', 'private-hash', 'VALIDATED')`, [ids.version, ids.spot, ids.run, publicPayload]);
-    await client.query(`INSERT INTO "GuestSession" (id, "tokenHash", "expiresAt") VALUES ($1, $2, now() + interval '1 day')`, [ids.guest, `${suffix}_token`]);
-    await client.query(`INSERT INTO "Attempt" (id, "guestSessionId", "spotId", "spotVersionId", official, "idempotencyKey", "submittedPayload", "resultPayload", "overallSimilarity", "metricKey", "metricVersion", "aggregatorKey", "aggregatorVersion") VALUES ($1, $2, $3, $4, true, 'first-idempotency-key', '{}'::jsonb, '{}'::jsonb, 100, 'l1', 1, 'equal_average', 1)`, [ids.attempt, ids.guest, ids.spot, ids.version]);
+    await client.query(`INSERT INTO "GuestIdentity" (id, "createdAt") VALUES ($1, now())`, [ids.identity]);
+    await client.query(`INSERT INTO "GuestSession" (id, "identityId", "tokenHash", "expiresAt") VALUES ($1, $2, $3, now() + interval '1 day')`, [ids.guest, ids.identity, `${suffix}_token`]);
+    await client.query(`INSERT INTO "Attempt" (id, "guestSessionId", "guestIdentityId", "spotId", "spotVersionId", official, "idempotencyKey", "idempotencyPayloadHash", "submittedPayload", "resultPayload", "overallSimilarity", "similarityBasisPoints", "scorePoints", "metricKey", "metricVersion", "aggregatorKey", "aggregatorVersion") VALUES ($1, $2, $3, $4, $5, true, 'first-idempotency-key', 'first-hash', '{}'::jsonb, '{}'::jsonb, 100, 10000, 1000, 'l1', 1, 'equal_average', 1)`, [ids.attempt, ids.guest, ids.identity, ids.spot, ids.version]);
     await client.query("SAVEPOINT before_constraints");
-    await assert.rejects(() => client.query(`INSERT INTO "Attempt" (id, "guestSessionId", "spotId", "spotVersionId", official, "idempotencyKey", "submittedPayload", "resultPayload", "overallSimilarity", "metricKey", "metricVersion", "aggregatorKey", "aggregatorVersion") VALUES ($1, $2, $3, $4, true, 'second-idempotency-key', '{}'::jsonb, '{}'::jsonb, 100, 'l1', 1, 'equal_average', 1)`, [`${ids.attempt}_duplicate`, ids.guest, ids.spot, ids.version]), (error) => error?.code === "23505");
+    await assert.rejects(() => client.query(`INSERT INTO "Attempt" (id, "guestSessionId", "guestIdentityId", "spotId", "spotVersionId", official, "idempotencyKey", "idempotencyPayloadHash", "submittedPayload", "resultPayload", "overallSimilarity", "similarityBasisPoints", "scorePoints", "metricKey", "metricVersion", "aggregatorKey", "aggregatorVersion") VALUES ($1, $2, $3, $4, $5, true, 'second-idempotency-key', 'second-hash', '{}'::jsonb, '{}'::jsonb, 100, 10000, 1000, 'l1', 1, 'equal_average', 1)`, [`${ids.attempt}_duplicate`, ids.guest, ids.identity, ids.spot, ids.version]), (error) => error?.code === "23505");
     await client.query("ROLLBACK TO SAVEPOINT before_constraints");
     await assert.rejects(() => client.query(`UPDATE "SpotVersion" SET "publicPayload" = '{"tampered":true}'::jsonb WHERE id = $1`, [ids.version]), /immutable/);
     await client.query("ROLLBACK TO SAVEPOINT before_constraints");

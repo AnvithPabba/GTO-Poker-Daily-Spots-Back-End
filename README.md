@@ -17,10 +17,10 @@ pnpm test:unit
 pnpm test:load
 ```
 
-The backend consumes `@poker-trainer/contracts` from the sibling checkout
-while the repositories are developed locally. Before deployment, pin an exact
-published contracts version and do not expose private solution modules to the
-frontend.
+The backend consumes the reviewed `@poker-trainer/contracts@0.3.0` tarball from
+`vendor/`, making this repository and Docker build independent of sibling
+source. npm publication still requires explicit approval; after publication,
+replace the tarball spec with exact registry version `0.3.0`.
 
 ## Layers and injected boundaries
 
@@ -92,7 +92,7 @@ external services:
 
 ```bash
 pnpm test:load
-LOAD_PATH=/api/v1/spots/today LOAD_REQUESTS=500 LOAD_CONCURRENCY=25 pnpm test:load
+LOAD_PATH=/api/v1/daily-games/today LOAD_REQUESTS=500 LOAD_CONCURRENCY=25 pnpm test:load
 ```
 
 It reports throughput and fails on any non-2xx response; it is a baseline, not
@@ -153,12 +153,14 @@ private Solver selector, converts it to the versioned application envelope,
 and stores public and private JSON in separate `SpotVersion` columns. It does
 not publish automatically.
 
-## Accounts and local administration
+## Public resource flow, accounts, and local administration
 
-`GET /api/v1/auth/me` and `GET /api/v1/auth/history` use the injected
-provider-neutral bearer verifier when one is configured. Account attempts use
-their own idempotency and official-attempt constraints; they are never merged
-with an opaque guest-cookie history. The local admin surface is loopback-only.
+The public flow is `GET /daily-games/today` → `GET /spots/:spotId` →
+`POST /spots/:spotId/attempts` → `GET /attempts/:attemptId`. Statistics and
+cursor history live under `/users/me/*`. These routes resolve an injected
+provider-neutral bearer principal when configured, otherwise a stable guest
+identity beneath rotating opaque cookies. Account and guest histories are
+never implicitly merged. The local admin surface is loopback-only.
 Compose's Nginx frontend adds a private proxy marker for `/api/v1/admin/*`;
 the API accepts that marker only when `ADMIN_TRUSTED_PROXY=true` and
 `NODE_ENV` is not `production`. Direct API requests still require a loopback

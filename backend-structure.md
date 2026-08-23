@@ -4,7 +4,7 @@
 
 This document defines the Node.js + Express + TypeScript backend, Prisma/PostgreSQL persistence, `pg-boss` queues, host-native solver integration, normalized spot storage, publication scheduler, guest attempts, and scoring.
 
-The backend is the trust boundary. It alone can read private GTO solutions and decide official/practice status. The browser receives public challenge data before submission and solution data only in the response to a valid stored attempt.
+The backend is the trust boundary. It alone can read private GTO solutions and decide official/practice status. The browser receives public challenge data before submission and solution-derived comparison data only from an ownership-checked stored attempt resource.
 
 See [../../overall-structure.md](../../overall-structure.md) for the ordered implementation roadmap, [../frontend/frontend-structure.md](../frontend/frontend-structure.md) for client behavior, and [../../Solver/solver-structure.md](../../Solver/solver-structure.md) for raw tree extraction and reach propagation. The detailed archive-to-PostgreSQL handoff and public/private read flows are in [../../storage-and-retrieval.md](../../storage-and-retrieval.md).
 
@@ -18,15 +18,15 @@ containers receive only normalized artifacts through the private ingestion
 boundary. The exact operator procedure is
 [`docs/spot-ingestion.md`](docs/spot-ingestion.md).
 
-Blocks 8–14 now include the runnable React-facing v2 boundary, provider-backed
+Blocks 8–14 now include the runnable React-facing v3 boundary, provider-backed
 account history, cookie rotation, loopback admin calendar/job controls with
 append-only audit records, filesystem archive/checksum ports, cache/metrics
 ports, and deterministic load smoke tests. External OIDC/JWKS, object storage,
 Prometheus, CDN, and multi-replica deployment adapters remain explicit
 provider injection points rather than hidden local implementations.
 
-The implemented v2 contract removes the old public mode split. Every spot has
-one required featured concrete hand, a selectable catalog
+The implemented v3 contract removes the old public mode split. Every spot has
+structured known/unknown preflop context, one required featured concrete hand, a selectable catalog
 of one to twenty concrete hands, and explicit hero/dealer/position/chip
 presentation metadata. Frequencies and reached ranges remain private JSONB.
 
@@ -67,7 +67,7 @@ Controllers parse and validate transport data, call application services, and ma
 - Prefix version 1 routes with `/api/v1`.
 - Use JSON, UTC RFC 3339 timestamps, UUID/ULID-style opaque IDs, and Pacific `YYYY-MM-DD` publication dates.
 - Validate requests and responses with shared Zod schemas. Private schemas remain backend-only.
-- Use a consistent error envelope with `code`, `message`, `requestId`, and optional field issues.
+- Use a consistent `{ error: { code, message, details?, requestId } }` envelope.
 - Require an idempotency key for attempt POSTs and mutation-style admin actions where retries could duplicate work.
 - Use cursor pagination for archive, jobs, runs, and logs.
 - Return ETags on public GETs. Immutable spot-version responses can use long-lived public caching; today's index uses short caching and revalidation.
@@ -75,29 +75,33 @@ Controllers parse and validate transport data, call application services, and ma
 
 ## Public Endpoints
 
-### `GET /api/v1/spots/today`
+### `GET /api/v1/daily-games/today`
 
 Returns the current Pacific publication date and its published spots ordered by `slotOrder`.
 
 ```ts
-type TodayResponse = {
-  publicationDate: string;
+type DailyGame = {
+  date: string;
+  requestedDate: string;
   timezone: "America/Los_Angeles";
-  isFallback: boolean;
-  fallbackFromDate?: string;
+  fallback: { active: boolean; reason?: string };
   spots: PublicSpotSummary[];
+  progress: DailyProgress;
 };
 ```
 
-If no slot is published for the current date, return the latest published date's spots with `isFallback: true`, preserve their actual publication date, and emit/deduplicate an operational alert. Do not synthesize a current-date completion.
+If no slot is published for the current date, return the latest published date's spots with `fallback.active: true`, preserve requested and served dates, and emit/deduplicate an operational alert. Do not synthesize a current-date completion.
 
 ### `GET /api/v1/spots/:id`
 
 Returns one currently published spot's immutable public `SpotVersion` payload. The `id` is the public spot ID; the response includes the immutable `spotVersionId` required by submissions. Unpublished, held, rejected, or superseded-only records are not publicly readable.
 
-### `GET /api/v1/spots/archive`
+### Daily-game archive reads
 
-Returns published spot summaries grouped or filterable by Pacific date. Planned query parameters include `cursor`, `limit`, `from`, and `to`. When a guest cookie resolves, summaries may include completion state for that guest without exposing attempts from another guest.
+`GET /api/v1/daily-games/:date` returns one exact historical Pacific date and
+never falls back. `GET /api/v1/daily-games?from=&to=` returns bounded calendar
+summaries. Current-principal attempt history uses
+`GET /api/v1/users/me/attempts?limit=&cursor=`.
 
 ### `POST /api/v1/spots/:id/attempts`
 
@@ -105,9 +109,8 @@ Validates and synchronously scores the featured hand plus any selected optional
 concrete hands against the requested immutable version.
 
 ```ts
-type AttemptRequest = {
+type CreateAttemptRequest = {
   spotVersionId: string;
-  idempotencyKey: string;
   hands: Array<{
     combo: string;
     allocations: Record<string, number>;
@@ -116,19 +119,28 @@ type AttemptRequest = {
 ```
 
 Every allocation is an integer number of basis points and every hand totals
-exactly `10_000`. The v2 contract accepts one through twenty unique concrete
+exactly `10_000`. The v3 contract accepts one through twenty unique concrete
 combos from the public selectable set, requires the featured combo, and ignores
 every unselected combo.
 
-The successful response is the first point where solution data may be returned:
+The retry key is supplied in the `Idempotency-Key` HTTP header. A successful
+`201 Created` returns only the new attempt ID, official/practice kind, compact
+score, progress, and a `Location` header. The frontend follows that location.
+
+### `GET /api/v1/attempts/:attemptId`
+
+After verifying the current account or stable guest identity owns the attempt,
+this endpoint returns submitted/GTO percentages, signed/absolute differences,
+per-hand and aggregate similarity, majority action, and daily progress. This is
+the first point where solution-derived comparison data is returned.
 
 ```ts
 type AttemptResponse = {
   attemptId: string;
-  official: boolean;
+  attemptKind: "official" | "practice";
   metric: { key: string; version: number };
   aggregator: { key: "equal_average"; version: number };
-  overallSimilarity: number;
+  score: { points: number; maximumPoints: 1000; similarityBasisPoints: number };
   hands: Array<{
     combo: string;
     similarity: number;
@@ -231,7 +243,7 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 ### `Spot`
 
 - `id`, stable public identity, title/metadata/tags, and lifecycle status summary.
-- The former `mode` column is removed by the v2 forward migration because every
+- The former `mode` column is removed by the earlier forward migration because every
   spot supports the same featured-hand-plus-optional-extras behavior.
 - `createdAt`, `updatedAt`, optional current approved/published version relation.
 - Contains no mutable solution frequency.

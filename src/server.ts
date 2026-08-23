@@ -9,6 +9,7 @@ import { createPrismaClient } from "./db.js";
 import { createPublicApiRouter } from "./api.js";
 import { createAdminRouter } from "./admin.js";
 import { InMemoryMetricsStore } from "./metrics.js";
+import { PublicApplicationService } from "./application/public-api.js";
 
 export async function startApi(): Promise<void> {
   const config = loadConfig();
@@ -20,6 +21,7 @@ export async function startApi(): Promise<void> {
   });
   const prisma = createPrismaClient(config.DATABASE_URL);
   const metrics = new InMemoryMetricsStore();
+  const publicApplication = new PublicApplicationService(prisma);
   // A transient database disconnect must make readiness fail, not terminate
   // the HTTP process. The health route reports the query failure explicitly.
   pool.on("error", (error: Error) => {
@@ -31,6 +33,7 @@ export async function startApi(): Promise<void> {
     service: "api",
   });
   app.use("/api/v1", createPublicApiRouter({
+    application: publicApplication,
     prisma,
     guestCookieHashSecret: config.GUEST_COOKIE_HASH_SECRET,
     guestCookieName: config.GUEST_COOKIE_NAME,

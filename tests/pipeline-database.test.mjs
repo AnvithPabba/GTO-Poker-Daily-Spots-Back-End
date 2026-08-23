@@ -13,13 +13,14 @@ test("validated pipeline persists split payloads idempotently and rejects confli
   const ids = { template: `${suffix}_template`, job: `${suffix}_job`, retryJob: `${suffix}_retry`, spot: `${suffix}_spot`, version: `${suffix}_version` };
   const sourceHash = "e".repeat(64);
   const publicPayload = {
-    schemaVersion: 2, spotId: ids.spot, spotVersionId: ids.version, publicationDate: "2026-08-21", slotOrder: 1,
+    schemaVersion: 3, spotId: ids.spot, spotVersionId: ids.version, publicationDate: "2026-08-21", slotOrder: 1,
+    preflop: { status: "unknown", label: "Preflop start unavailable", summary: "Legacy fixture." },
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
     legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
   const privatePayload = { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: 0.75, frequencies: { a0: 2_500, a1: 7_500 } } }, reachedRanges: { hero: { AhAs: 0.75 }, opponent: { KcKd: 1 } } };
-  const envelope = { schemaVersion: 2, sourceHash, publicPayload, privateSolutionPayload: privatePayload, candidateManifest: { sourceHash, path: ["root", "decision"], selectedCombo: "AhAs", fallbackUsed: false, rankingVersion: "1" }, provenance: { normalizerVersion: "2", selectionRankingVersion: "1" } };
+  const envelope = { schemaVersion: 3, sourceHash, publicPayload, privateSolutionPayload: privatePayload, candidateManifest: { sourceHash, path: ["root", "decision"], selectedCombo: "AhAs", fallbackUsed: false, rankingVersion: "1" }, provenance: { normalizerVersion: "3", selectionRankingVersion: "1" } };
   const baseInput = { jobId: ids.job, attemptNumber: 1, resolvedInput: { pot: 50, effective_stack: 100, board: ["Qs", "Jh", "2h"], ranges: { ip: "AA", oop: "KK" } }, inputSha256: "1".repeat(64), outputSha256: "2".repeat(64), logSha256: "3".repeat(64), archiveInputKey: `solver-runs/sha256/${sourceHash}/input.txt`, archiveOutputKey: `solver-runs/sha256/${sourceHash}/output_result.json`, archiveLogKey: `solver-runs/sha256/${sourceHash}/solver.log` };
   try {
     await prisma.solverTemplate.create({ data: { id: ids.template, familyId: suffix, version: 1, name: "pipeline test", config: baseInput.resolvedInput, updatedAt: new Date() } });

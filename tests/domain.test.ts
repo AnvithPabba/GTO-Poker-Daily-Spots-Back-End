@@ -8,6 +8,7 @@ import { l1Metric, scoreHands } from "../src/scoring.js";
 import { OidcIdentityProvider } from "../src/oidc.js";
 import { isLoopbackRequest } from "../src/admin.js";
 import { guestCookieHeader } from "../src/api.js";
+import { summarizeBreakdowns } from "../src/application/public-api.js";
 
 describe("backend domain and ports", () => {
   it.each([[{ a0: 10000 }, { a0: 10000 }, 100], [{ a0: 5000, a1: 5000 }, { a0: 10000, a1: 0 }, 50]])("scores basis-point vectors deterministically", (submitted, gto, expected) => {
@@ -58,5 +59,21 @@ describe("backend domain and ports", () => {
   it("marks guest cookies Secure only when the deployment requests it", () => {
     expect(guestCookieHeader("guest", "abc", false)).not.toContain("Secure");
     expect(guestCookieHeader("guest", "abc", true)).toContain("Secure");
+  });
+
+  it("withholds category statistics until three official samples and then averages deterministically", () => {
+    // Arrange
+    const samples = [
+      { key: "flop", label: "Flop", similarityBasisPoints: 7_000 },
+      { key: "flop", label: "Flop", similarityBasisPoints: 8_000 },
+      { key: "turn", label: "Turn", similarityBasisPoints: 9_000 },
+      { key: "flop", label: "Flop", similarityBasisPoints: 9_000 },
+    ];
+
+    // Act
+    const result = summarizeBreakdowns(samples);
+
+    // Assert
+    expect(result).toEqual([{ key: "flop", label: "Flop", sampleSize: 3, averageScoreBasisPoints: 8_000 }]);
   });
 });

@@ -26,7 +26,7 @@ export const candidateManifestSchema = z.object({
 }).strict();
 
 export const normalizedEnvelopeSchema = z.object({
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(3),
   sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   publicPayload: publicSpotSchema,
   privateSolutionPayload: privateSolutionPayloadSchema,
@@ -34,6 +34,7 @@ export const normalizedEnvelopeSchema = z.object({
   provenance: z.object({
     normalizerVersion: z.string().min(1),
     selectionRankingVersion: z.string().min(1),
+    configurationHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     solverRunId: z.string().optional(),
   }).strict(),
 }).strict();

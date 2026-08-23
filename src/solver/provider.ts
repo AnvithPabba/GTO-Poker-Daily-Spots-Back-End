@@ -1,3 +1,4 @@
+import { preflopContextSchema } from "@poker-trainer/contracts";
 import { validateNormalizedEnvelope, type NormalizedEnvelope } from "./normalized.js";
 
 type ProviderOptions = {
@@ -106,6 +107,9 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const providerPublic = root.publicPayload as Record<string, unknown>;
   const source = publicSource as Record<string, unknown>;
   const sourceHash = sourceHashFromProvider(source);
+  const configurationHash = typeof source.configurationHash === "string" && hashPattern.test(source.configurationHash)
+    ? source.configurationHash
+    : undefined;
   const spotId = typeof providerPublic.spotId === "string" ? providerPublic.spotId : options.spotId;
   const publicationDate = typeof providerPublic.publicationDate === "string" ? providerPublic.publicationDate : options.publicationDate;
   if (!spotId) throw new Error("spot ID is required (--spot-id)");
@@ -141,7 +145,7 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
     actor: initialActor,
     allIn: { ip: false, oop: false },
   };
-  const history = Array.isArray(providerPublic.history) ? providerPublic.history.map((event) => {
+  const replayHistory = Array.isArray(providerPublic.history) ? providerPublic.history.map((event) => {
     if (!event || typeof event !== "object") throw new Error("provider history event is malformed");
     const item = event as Record<string, unknown>;
     if (item.kind === "deal") return { kind: "deal" as const, card: asCard(item.card, "history.card"), ...(typeof item.solverLabel === "string" ? { solverLabel: item.solverLabel } : {}) };
@@ -149,6 +153,7 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
     if (item.kind !== "action" || typeof label !== "string" || (item.actor !== "ip" && item.actor !== "oop")) throw new Error("provider history action is malformed");
     return { kind: "action" as const, actor: item.actor, actionType: actionType(item.actionType, label), solverLabel: label, ...(optionalNumber(item.amount) !== undefined ? { amount: optionalNumber(item.amount) } : {}), ...(optionalNumber(item.toAmount) !== undefined ? { toAmount: optionalNumber(item.toAmount) } : {}) };
   }) : [];
+  const history = [...replayHistory, { kind: "decision" as const, actor }];
   const rawActions = providerPublic.legalActions;
   if (!Array.isArray(rawActions) || rawActions.length === 0) throw new Error("provider legalActions are missing");
   const legalActions = rawActions.map((raw, index) => {
@@ -193,15 +198,21 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
     holdingVisibility: "featured_hero" as const,
     chipUnit: rawPresentation.chipUnit === "currency" ? "currency" as const : "bb" as const,
   };
+  const preflop = preflopContextSchema.parse(providerPublic.preflop ?? {
+    status: "unknown",
+    label: "Preflop start unavailable",
+    summary: "This legacy solve did not preserve its preflop scenario.",
+  });
   const normalized = {
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
     sourceHash,
     publicPayload: {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       spotId,
       spotVersionId: typeof providerPublic.spotVersionId === "string" ? providerPublic.spotVersionId : (options.spotVersionId ?? `${spotId}_v1`),
       publicationDate,
       slotOrder: options.slotOrder ?? (typeof providerPublic.slotOrder === "number" ? providerPublic.slotOrder : 1),
+      preflop,
       initialState,
       history,
       decision: state,
@@ -217,7 +228,11 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
       reachedRanges: { hero: reachedCombos(privatePayload.ranges, hero), opponent: reachedCombos(privatePayload.ranges, opponent) },
     },
     candidateManifest: { sourceHash, path: providerPath(source), selectedCombo: featuredCombo, fallbackUsed: false, rankingVersion: "1" },
-    provenance: { normalizerVersion: "provider-python-v2", selectionRankingVersion: "1" },
+    provenance: {
+      normalizerVersion: "provider-python-v3",
+      selectionRankingVersion: "1",
+      ...(configurationHash ? { configurationHash } : {}),
+    },
   };
   return validateNormalizedEnvelope(normalized);
 }

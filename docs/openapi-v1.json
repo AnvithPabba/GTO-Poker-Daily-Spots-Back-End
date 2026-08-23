@@ -1,0 +1,1938 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Poker Daily Trainer API",
+    "version": "0.3.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/daily-games/today": {
+      "get": {
+        "operationId": "getTodayDailyGame",
+        "summary": "Get today's Pacific daily game",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyGame"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/daily-games/{date}": {
+      "get": {
+        "operationId": "getDailyGame",
+        "summary": "Get one historical daily game",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyGame"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/daily-games": {
+      "get": {
+        "operationId": "listDailyGames",
+        "summary": "List archive calendar summaries",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyGameRangeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/spots/{spotId}": {
+      "get": {
+        "operationId": "getSpot",
+        "summary": "Get one public challenge",
+        "parameters": [
+          {
+            "name": "spotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicSpot"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/spots/{spotId}/attempts": {
+      "post": {
+        "operationId": "createAttempt",
+        "summary": "Score and persist an attempt",
+        "parameters": [
+          {
+            "name": "spotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 256
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttemptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAttemptResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/attempts/{attemptId}": {
+      "get": {
+        "operationId": "getAttempt",
+        "summary": "Get an ownership-checked attempt result",
+        "parameters": [
+          {
+            "name": "attemptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/stats": {
+      "get": {
+        "operationId": "getMyStats",
+        "summary": "Get statistics for the current principal",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/attempts": {
+      "get": {
+        "operationId": "getMyAttempts",
+        "summary": "Get paginated attempt history",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptHistoryResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "BAD_REQUEST",
+                  "UNAUTHENTICATED",
+                  "FORBIDDEN",
+                  "SPOT_NOT_FOUND",
+                  "SPOT_NOT_AVAILABLE",
+                  "ATTEMPT_NOT_FOUND",
+                  "ATTEMPT_FORBIDDEN",
+                  "FEATURED_HAND_REQUIRED",
+                  "HAND_NOT_ALLOWED",
+                  "ACTION_NOT_ALLOWED",
+                  "FREQUENCY_OUT_OF_RANGE",
+                  "STRATEGY_TOTAL_INVALID",
+                  "IDEMPOTENCY_CONFLICT",
+                  "RATE_LIMITED",
+                  "SERVICE_UNAVAILABLE",
+                  "INTERNAL"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "requestId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:ApiError"
+      },
+      "DailyGame": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "requestedDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "timezone": {
+            "type": "string",
+            "enum": [
+              "America/Los_Angeles"
+            ]
+          },
+          "fallback": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "active"
+            ],
+            "additionalProperties": false
+          },
+          "spots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spotId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                },
+                "spotVersionId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                },
+                "sequence": {
+                  "type": "integer",
+                  "exclusiveMinimum": true,
+                  "minimum": 0
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "street": {
+                  "type": "string",
+                  "enum": [
+                    "flop",
+                    "turn",
+                    "river"
+                  ]
+                },
+                "heroPosition": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "completed": {
+                  "type": "boolean"
+                },
+                "officialScorePoints": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000
+                }
+              },
+              "required": [
+                "spotId",
+                "spotVersionId",
+                "sequence",
+                "title",
+                "street",
+                "heroPosition",
+                "completed"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "completedSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "in_progress",
+                  "completed"
+                ]
+              },
+              "nextSpot": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                  },
+                  "sequence": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "sequence"
+                ],
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "scorePoints": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maximumScorePoints": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "completedSpots",
+              "totalSpots",
+              "status",
+              "nextSpot",
+              "scorePoints",
+              "maximumScorePoints"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "date",
+          "requestedDate",
+          "timezone",
+          "fallback",
+          "spots",
+          "progress"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:DailyGame"
+      },
+      "DailyGameRangeResponse": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "games": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "spotCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "completedSpots": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "available",
+                    "completed"
+                  ]
+                },
+                "officialScorePoints": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maximumScorePoints": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "date",
+                "spotCount",
+                "completedSpots",
+                "status",
+                "officialScorePoints",
+                "maximumScorePoints"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "games"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:DailyGameRangeResponse"
+      },
+      "PublicSpot": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "enum": [
+              3
+            ]
+          },
+          "spotId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "spotVersionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "publicationDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "slotOrder": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "minimum": 0
+          },
+          "preflop": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "known"
+                    ]
+                  },
+                  "scenarioId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "actions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sequence": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "minimum": 0
+                        },
+                        "actor": {
+                          "type": "string",
+                          "enum": [
+                            "ip",
+                            "oop"
+                          ]
+                        },
+                        "position": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "call",
+                            "raise",
+                            "three_bet",
+                            "four_bet",
+                            "fold",
+                            "check"
+                          ]
+                        },
+                        "amountBb": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "sequence",
+                        "actor",
+                        "position",
+                        "type",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rangeAssumptions": {
+                    "type": "object",
+                    "properties": {
+                      "ip": {
+                        "type": "object",
+                        "properties": {
+                          "presetId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "handClass": {
+                                  "type": "string",
+                                  "pattern": "^(?:[2-9TJQKA]{2}|[2-9TJQKA]{2}[so])$"
+                                },
+                                "inclusionBasisPoints": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 10000
+                                }
+                              },
+                              "required": [
+                                "handClass",
+                                "inclusionBasisPoints"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "presetId",
+                          "label",
+                          "cells"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "oop": {
+                        "type": "object",
+                        "properties": {
+                          "presetId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "cells": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "handClass": {
+                                  "type": "string",
+                                  "pattern": "^(?:[2-9TJQKA]{2}|[2-9TJQKA]{2}[so])$"
+                                },
+                                "inclusionBasisPoints": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 10000
+                                }
+                              },
+                              "required": [
+                                "handClass",
+                                "inclusionBasisPoints"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "presetId",
+                          "label",
+                          "cells"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "ip",
+                      "oop"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "status",
+                  "scenarioId",
+                  "label",
+                  "summary",
+                  "actions",
+                  "rangeAssumptions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "unknown"
+                    ]
+                  },
+                  "label": {
+                    "type": "string",
+                    "enum": [
+                      "Preflop start unavailable"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "status",
+                  "label",
+                  "summary"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "initialState": {
+            "type": "object",
+            "properties": {
+              "board": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[2-9TJQKA][cdhs]$"
+                },
+                "minItems": 3,
+                "maxItems": 5
+              },
+              "pot": {
+                "type": "number",
+                "minimum": 0
+              },
+              "stacks": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "oop": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "ip",
+                  "oop"
+                ],
+                "additionalProperties": false
+              },
+              "street": {
+                "type": "string",
+                "enum": [
+                  "flop",
+                  "turn",
+                  "river"
+                ]
+              },
+              "actor": {
+                "type": "string",
+                "enum": [
+                  "ip",
+                  "oop"
+                ]
+              },
+              "allIn": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "boolean"
+                  },
+                  "oop": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "ip",
+                  "oop"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "board",
+              "pot",
+              "stacks",
+              "street",
+              "actor",
+              "allIn"
+            ],
+            "additionalProperties": false
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "action"
+                      ]
+                    },
+                    "actor": {
+                      "type": "string",
+                      "enum": [
+                        "ip",
+                        "oop"
+                      ]
+                    },
+                    "actionId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "actionType": {
+                      "type": "string",
+                      "enum": [
+                        "check",
+                        "bet",
+                        "call",
+                        "raise",
+                        "fold"
+                      ]
+                    },
+                    "solverLabel": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "amount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "toAmount": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "actor",
+                    "actionType",
+                    "solverLabel"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "deal"
+                      ]
+                    },
+                    "card": {
+                      "type": "string",
+                      "pattern": "^[2-9TJQKA][cdhs]$"
+                    },
+                    "solverLabel": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "card"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "deal_hole"
+                      ]
+                    },
+                    "actor": {
+                      "type": "string",
+                      "enum": [
+                        "ip",
+                        "oop"
+                      ]
+                    },
+                    "cards": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[2-9TJQKA][cdhs]$"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "actor",
+                    "cards"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "deal_board"
+                      ]
+                    },
+                    "street": {
+                      "type": "string",
+                      "enum": [
+                        "flop",
+                        "turn",
+                        "river"
+                      ]
+                    },
+                    "cards": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[2-9TJQKA][cdhs]$"
+                      },
+                      "minItems": 1,
+                      "maxItems": 3
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "street",
+                    "cards"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "decision"
+                      ]
+                    },
+                    "actor": {
+                      "type": "string",
+                      "enum": [
+                        "ip",
+                        "oop"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "actor"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "decision": {
+            "type": "object",
+            "properties": {
+              "board": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[2-9TJQKA][cdhs]$"
+                },
+                "minItems": 3,
+                "maxItems": 5
+              },
+              "pot": {
+                "type": "number",
+                "minimum": 0
+              },
+              "stacks": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "oop": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "ip",
+                  "oop"
+                ],
+                "additionalProperties": false
+              },
+              "street": {
+                "type": "string",
+                "enum": [
+                  "flop",
+                  "turn",
+                  "river"
+                ]
+              },
+              "actor": {
+                "type": "string",
+                "enum": [
+                  "ip",
+                  "oop"
+                ]
+              },
+              "allIn": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "boolean"
+                  },
+                  "oop": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "ip",
+                  "oop"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "board",
+              "pot",
+              "stacks",
+              "street",
+              "actor",
+              "allIn"
+            ],
+            "additionalProperties": false
+          },
+          "legalActions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^a\\d+$"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "check",
+                    "bet",
+                    "call",
+                    "raise",
+                    "fold"
+                  ]
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "toAmount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "isAllIn": {
+                  "type": "boolean"
+                },
+                "displayLabel": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "solverLabel": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "isAllIn",
+                "displayLabel"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "featuredCombo": {
+            "type": "string",
+            "pattern": "^[2-9TJQKA][cdhs][2-9TJQKA][cdhs]$"
+          },
+          "selectableCombos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "combo": {
+                  "type": "string",
+                  "pattern": "^[2-9TJQKA][cdhs][2-9TJQKA][cdhs]$"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "pair",
+                    "suited",
+                    "offsuit"
+                  ]
+                }
+              },
+              "required": [
+                "combo"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "presentation": {
+            "type": "object",
+            "properties": {
+              "heroActor": {
+                "type": "string",
+                "enum": [
+                  "ip",
+                  "oop"
+                ]
+              },
+              "dealerActor": {
+                "type": "string",
+                "enum": [
+                  "ip",
+                  "oop"
+                ]
+              },
+              "positions": {
+                "type": "object",
+                "properties": {
+                  "ip": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "oop": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "ip",
+                  "oop"
+                ],
+                "additionalProperties": false
+              },
+              "holdingVisibility": {
+                "type": "string",
+                "enum": [
+                  "featured_hero"
+                ]
+              },
+              "chipUnit": {
+                "type": "string",
+                "enum": [
+                  "bb",
+                  "currency"
+                ]
+              }
+            },
+            "required": [
+              "heroActor",
+              "dealerActor",
+              "positions",
+              "holdingVisibility",
+              "chipUnit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "spotId",
+          "spotVersionId",
+          "publicationDate",
+          "slotOrder",
+          "preflop",
+          "initialState",
+          "history",
+          "decision",
+          "legalActions",
+          "featuredCombo",
+          "selectableCombos",
+          "presentation"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:PublicSpot"
+      },
+      "CreateAttemptResponse": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "attemptKind": {
+            "type": "string",
+            "enum": [
+              "official",
+              "practice"
+            ]
+          },
+          "score": {
+            "type": "object",
+            "properties": {
+              "points": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "maximumPoints": {
+                "type": "number",
+                "enum": [
+                  1000
+                ]
+              },
+              "similarityBasisPoints": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "required": [
+              "points",
+              "maximumPoints",
+              "similarityBasisPoints"
+            ],
+            "additionalProperties": false
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "completedSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "in_progress",
+                  "completed"
+                ]
+              },
+              "nextSpot": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                  },
+                  "sequence": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "sequence"
+                ],
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "scorePoints": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maximumScorePoints": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "completedSpots",
+              "totalSpots",
+              "status",
+              "nextSpot",
+              "scorePoints",
+              "maximumScorePoints"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "attemptId",
+          "attemptKind",
+          "score",
+          "progress"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:CreateAttemptResponse"
+      },
+      "CreateAttemptRequest": {
+        "type": "object",
+        "properties": {
+          "spotVersionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "hands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "combo": {
+                  "type": "string",
+                  "pattern": "^[2-9TJQKA][cdhs][2-9TJQKA][cdhs]$"
+                },
+                "allocations": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  }
+                }
+              },
+              "required": [
+                "combo",
+                "allocations"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "spotVersionId",
+          "hands"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:CreateAttemptRequest"
+      },
+      "AttemptResource": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "spotId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "spotVersionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{3,128}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attemptKind": {
+            "type": "string",
+            "enum": [
+              "official",
+              "practice"
+            ]
+          },
+          "metric": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "key",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "aggregator": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "enum": [
+                  "equal_average"
+                ]
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "key",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "score": {
+            "type": "object",
+            "properties": {
+              "points": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "maximumPoints": {
+                "type": "number",
+                "enum": [
+                  1000
+                ]
+              },
+              "similarityBasisPoints": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "required": [
+              "points",
+              "maximumPoints",
+              "similarityBasisPoints"
+            ],
+            "additionalProperties": false
+          },
+          "hands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "combo": {
+                  "type": "string",
+                  "pattern": "^[2-9TJQKA][cdhs][2-9TJQKA][cdhs]$"
+                },
+                "similarityBasisPoints": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "gtoMajorityActionId": {
+                  "type": "string",
+                  "pattern": "^a\\d+$"
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "actionId": {
+                        "type": "string",
+                        "pattern": "^a\\d+$"
+                      },
+                      "submittedBasisPoints": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10000
+                      },
+                      "gtoBasisPoints": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10000
+                      },
+                      "signedDifferenceBasisPoints": {
+                        "type": "integer"
+                      },
+                      "absoluteDifferenceBasisPoints": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "actionId",
+                      "submittedBasisPoints",
+                      "gtoBasisPoints",
+                      "signedDifferenceBasisPoints",
+                      "absoluteDifferenceBasisPoints"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "combo",
+                "similarityBasisPoints",
+                "gtoMajorityActionId",
+                "actions"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "completedSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalSpots": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "in_progress",
+                  "completed"
+                ]
+              },
+              "nextSpot": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                  },
+                  "sequence": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "sequence"
+                ],
+                "additionalProperties": false,
+                "nullable": true
+              },
+              "scorePoints": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maximumScorePoints": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "completedSpots",
+              "totalSpots",
+              "status",
+              "nextSpot",
+              "scorePoints",
+              "maximumScorePoints"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "attemptId",
+          "spotId",
+          "spotVersionId",
+          "createdAt",
+          "attemptKind",
+          "metric",
+          "aggregator",
+          "score",
+          "hands",
+          "progress"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:AttemptResource"
+      },
+      "StatsResponse": {
+        "type": "object",
+        "properties": {
+          "currentStreak": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bestStreak": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dailyGamesCompleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spotsCompleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "averageScoreBasisPoints": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "breakdowns": {
+            "type": "object",
+            "properties": {
+              "scenarios": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sampleSize": {
+                      "type": "integer",
+                      "minimum": 3
+                    },
+                    "averageScoreBasisPoints": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "sampleSize",
+                    "averageScoreBasisPoints"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "streets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sampleSize": {
+                      "type": "integer",
+                      "minimum": 3
+                    },
+                    "averageScoreBasisPoints": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "sampleSize",
+                    "averageScoreBasisPoints"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "positions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sampleSize": {
+                      "type": "integer",
+                      "minimum": 3
+                    },
+                    "averageScoreBasisPoints": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "sampleSize",
+                    "averageScoreBasisPoints"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "scenarios",
+              "streets",
+              "positions"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "currentStreak",
+          "bestStreak",
+          "dailyGamesCompleted",
+          "spotsCompleted",
+          "averageScoreBasisPoints",
+          "breakdowns"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:StatsResponse"
+      },
+      "AttemptHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attemptId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                },
+                "spotId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                },
+                "spotVersionId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{3,128}$"
+                },
+                "attemptKind": {
+                  "type": "string",
+                  "enum": [
+                    "official",
+                    "practice"
+                  ]
+                },
+                "score": {
+                  "type": "object",
+                  "properties": {
+                    "points": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000
+                    },
+                    "maximumPoints": {
+                      "type": "number",
+                      "enum": [
+                        1000
+                      ]
+                    },
+                    "similarityBasisPoints": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "points",
+                    "maximumPoints",
+                    "similarityBasisPoints"
+                  ],
+                  "additionalProperties": false
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "attemptId",
+                "spotId",
+                "spotVersionId",
+                "attemptKind",
+                "score",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "attempts"
+        ],
+        "additionalProperties": false,
+        "x-zod-source": "@poker-trainer/contracts:AttemptHistoryResponse"
+      }
+    }
+  }
+}
