@@ -1,5 +1,5 @@
 # Standalone backend image. Build context is this backend repository; the
-# public contract arrives as the reviewed v0.3.0 tarball in vendor/.
+# public contract arrives as the reviewed v0.3.1 tarball in vendor/.
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ENV CI=true

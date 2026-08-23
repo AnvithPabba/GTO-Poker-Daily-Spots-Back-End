@@ -12,8 +12,8 @@ importers:
   .:
     dependencies:
       '@poker-trainer/contracts':
-        specifier: file:vendor/poker-trainer-contracts-0.3.0.tgz
-        version: file:vendor/poker-trainer-contracts-0.3.0.tgz
+        specifier: file:vendor/poker-trainer-contracts-0.3.1.tgz
+        version: file:vendor/poker-trainer-contracts-0.3.1.tgz
       '@prisma/client':
         specifier: ^6.15.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
@@ -222,9 +222,9 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@poker-trainer/contracts@file:vendor/poker-trainer-contracts-0.3.0.tgz':
-    resolution: {integrity: sha512-QIJIj7L5qGqjaCaWwUxzwqhjO11wm0uPre/ylKg+T0KksRqjGbDmhp+HqpuJTKt+RAe4Mt4FSCNRpM14fzcHlg==, tarball: file:vendor/poker-trainer-contracts-0.3.0.tgz}
-    version: 0.3.0
+  '@poker-trainer/contracts@file:vendor/poker-trainer-contracts-0.3.1.tgz':
+    resolution: {integrity: sha512-u4ACMzc3RhsNR4MmEy87FZYMrK9YtobSMean9qo1z/o3Kqin25dOATSlVkkrNaI44lFOMeKwxqdlBLd/zN8zrg==, tarball: file:vendor/poker-trainer-contracts-0.3.1.tgz}
+    version: 0.3.1
 
   '@prisma/client@6.19.3':
     resolution: {integrity: sha512-mKq3jQFhjvko5LTJFHGilsuQs+W+T3Gm451NzuTDGQxwCzwXHYnIu2zGkRoW+Exq3Rob7yp2MfzSrdIiZVhrBg==}
@@ -1205,7 +1205,7 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
-  '@poker-trainer/contracts@file:vendor/poker-trainer-contracts-0.3.0.tgz':
+  '@poker-trainer/contracts@file:vendor/poker-trainer-contracts-0.3.1.tgz':
     dependencies:
       zod: 3.25.76
 

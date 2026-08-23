@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { addPacificDays, assertLifecycleTransition, pacificDate, pacificMidnightUtc } from "../dist/publication.js";
+import { resolveExactComboStrategy } from "../dist/application/public-api.js";
 import { getSimilarityMetric, scoreHands } from "../dist/scoring.js";
 
 test("L1 scoring uses basis points and returns signed per-action deltas", () => {
@@ -11,6 +12,55 @@ test("L1 scoring uses basis points and returns signed per-action deltas", () => 
   assert.equal(result.gtoMajorityActionId, "a0");
   assert.equal(getSimilarityMetric("l1", 1).key, "l1");
   assert.throws(() => getSimilarityMetric("unknown", 1), /unknown similarity metric/);
+});
+
+test("exact-combo scoring preserves distinct stored strategies", () => {
+  // Arrange
+  const actionOrder = ["check", "jam"];
+  const submitted = { check: 5_000, jam: 5_000 };
+  const byCombo = {
+    "8s8h": { check: 10_000, jam: 0 },
+    "AcKc": { check: 2_500, jam: 7_500 },
+  };
+
+  // Act
+  const eights = scoreHands(actionOrder, submitted, byCombo["8s8h"]);
+  const aceKing = scoreHands(actionOrder, submitted, byCombo["AcKc"]);
+
+  // Assert
+  assert.notEqual(eights.similarity, aceKing.similarity);
+  assert.equal(eights.gtoMajorityActionId, "check");
+  assert.equal(aceKing.gtoMajorityActionId, "jam");
+  assert.equal(eights.actions[0].gtoBasisPoints, 10_000);
+  assert.equal(aceKing.actions[0].gtoBasisPoints, 2_500);
+});
+
+test("exact-combo resolver selects the requested DB entry and never a featured fallback", () => {
+  // Arrange: the private JSONB payload has different vectors for each exact
+  // combo, with one entry stored in the opposite card order.
+  const solution = {
+    actionOrder: ["check", "jam"],
+    byCombo: {
+      "8s8h": { frequencies: { check: 10_000, jam: 0 } },
+      "KcAc": { frequencies: { check: 2_500, jam: 7_500 } },
+    },
+  };
+
+  // Act
+  const eights = resolveExactComboStrategy(solution, "8s8h");
+  const aceKing = resolveExactComboStrategy(solution, "AcKc");
+  const absent = resolveExactComboStrategy(solution, "QhQc");
+  const equalSubmission = { check: 5_000, jam: 5_000 };
+  const eightsScore = scoreHands(solution.actionOrder, equalSubmission, eights.frequencies);
+  const aceKingScore = scoreHands(solution.actionOrder, equalSubmission, aceKing.frequencies);
+
+  // Assert
+  assert.deepEqual(eights?.frequencies, { check: 10_000, jam: 0 });
+  assert.deepEqual(aceKing?.frequencies, { check: 2_500, jam: 7_500 });
+  assert.equal(absent, undefined);
+  assert.notEqual(eightsScore.similarity, aceKingScore.similarity);
+  assert.equal(eightsScore.gtoMajorityActionId, "check");
+  assert.equal(aceKingScore.gtoMajorityActionId, "jam");
 });
 
 test("Pacific publication helpers handle DST and calendar arithmetic", () => {

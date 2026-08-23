@@ -80,5 +80,5 @@ export function createOpenApiDocument() {
     if (!runtimeSchema) throw new Error(`missing runtime schema for ${name}`);
     return [name, { ...(zodToJsonSchema(runtimeSchema, { target: "openApi3", $refStrategy: "none" }) as Record<string, unknown>), "x-zod-source": `@poker-trainer/contracts:${name}` }];
   }));
-  return { openapi: "3.1.0", info: { title: "Poker Daily Trainer API", version: "0.3.0" }, servers: [{ url: "/" }], paths, components: { schemas } } as const;
+  return { openapi: "3.1.0", info: { title: "Poker Daily Trainer API", version: "0.3.1" }, servers: [{ url: "/" }], paths, components: { schemas } } as const;
 }

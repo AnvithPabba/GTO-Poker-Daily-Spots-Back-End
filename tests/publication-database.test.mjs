@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 
-import { addPacificDays, countFutureCoverage, publishPacificDate, approveSpotVersion, scheduleSpotVersion, pacificDate } from "../dist/publication.js";
+import { addPacificDays, countFutureCoverage, publishPacificDate, approveSpotVersion, quarantinePublishedVersion, scheduleSpotVersion, pacificDate } from "../dist/publication.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -26,7 +26,17 @@ test("database publication lifecycle is guarded and Pacific-date coverage counts
     assert.equal(published.length, 1);
     assert.equal((await prisma.spotVersion.findUniqueOrThrow({ where: { id: ids.version } })).status, "PUBLISHED");
     assert.equal((await prisma.publicationSlot.findUniqueOrThrow({ where: { id: slot.id } })).status, "PUBLISHED");
+    const quarantined = await quarantinePublishedVersion(prisma, ids.version, "native solver emitted one uniform all-in vector", "test-operator");
+    assert.equal(quarantined.cancelledSlots, 1);
+    assert.equal((await prisma.spotVersion.findUniqueOrThrow({ where: { id: ids.version } })).status, "SUPERSEDED");
+    assert.equal((await prisma.publicationSlot.findUniqueOrThrow({ where: { id: slot.id } })).status, "CANCELLED");
+    const retiredSpot = await prisma.spot.findUniqueOrThrow({ where: { id: ids.spot } });
+    assert.equal(retiredSpot.status, "ARCHIVED");
+    assert.equal(retiredSpot.currentVersionId, null);
+    const audit = await prisma.adminAudit.findFirstOrThrow({ where: { operation: "quarantine_invalid_solver_version", targetId: ids.version } });
+    assert.equal(audit.actor, "test-operator");
   } finally {
+    await prisma.adminAudit.deleteMany({ where: { targetId: ids.version } });
     await prisma.publicationSlot.deleteMany({ where: { spotVersionId: ids.version } });
     await prisma.spotVersion.deleteMany({ where: { id: ids.version } });
     await prisma.spot.deleteMany({ where: { id: ids.spot } });

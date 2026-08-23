@@ -17,6 +17,7 @@ export type PersistRunInput = {
   logTail?: string;
   exitCode?: number;
   durationMs?: number;
+  qualityReport?: unknown;
 };
 
 export async function persistValidatedDraft(
@@ -40,7 +41,20 @@ export async function persistValidatedDraft(
       await tx.solverJob.update({ where: { id: input.jobId }, data: { status: SolverJobStatus.SUCCEEDED, attemptCount: input.attemptNumber, finishedAt: new Date() } });
       return { run: existingVersion.solverRun, spot: existingVersion.spot, version: existingVersion };
     }
-    const run = await tx.solverRun.create({
+    const existingRun = input.outputSha256
+      ? await tx.solverRun.findUnique({ where: { outputSha256: input.outputSha256 } })
+      : null;
+    if (existingRun) {
+      const mismatches = [
+        input.inputSha256 && existingRun.inputSha256 !== input.inputSha256 ? "input" : null,
+        input.logSha256 && existingRun.logSha256 !== input.logSha256 ? "log" : null,
+        envelope.sourceHash && existingRun.sourceHash !== envelope.sourceHash ? "source" : null,
+      ].filter(Boolean);
+      if (mismatches.length) {
+        throw new Error(`solver output hash already exists with conflicting ${mismatches.join(", ")} identity`);
+      }
+    }
+    const run = existingRun ?? await tx.solverRun.create({
       data: {
         jobId: input.jobId,
         attemptNumber: input.attemptNumber,
@@ -90,12 +104,28 @@ export async function persistValidatedDraft(
         selectionRankingVersion: envelope.provenance.selectionRankingVersion,
         publicPayloadSha256: publicHash,
         privatePayloadSha256: privateHash,
-        validationReport: { valid: true, validatedAt: new Date().toISOString() } as Prisma.InputJsonValue,
+        validationReport: {
+          valid: true,
+          validatedAt: new Date().toISOString(),
+          ...(input.qualityReport !== undefined ? { quality: input.qualityReport as Prisma.InputJsonValue } : {}),
+          ...(envelope.provenance.strategyDiversity ? { strategyDiversity: envelope.provenance.strategyDiversity as Prisma.InputJsonValue } : {}),
+        } as Prisma.InputJsonValue,
         status: SpotVersionStatus.VALIDATED,
         validatedAt: new Date(),
       },
     });
-    await tx.solverJob.update({ where: { id: input.jobId }, data: { status: SolverJobStatus.SUCCEEDED, attemptCount: input.attemptNumber, finishedAt: new Date(), successfulRunId: run.id } });
+    await tx.solverJob.update({
+      where: { id: input.jobId },
+      data: {
+        status: SolverJobStatus.SUCCEEDED,
+        attemptCount: input.attemptNumber,
+        finishedAt: new Date(),
+        // One immutable run may back several selected spots from the same
+        // native output. The one-to-one successfulRun relation remains owned
+        // by the job that originally created that run.
+        ...(existingRun ? {} : { successfulRunId: run.id }),
+      },
+    });
     return { run, spot, version };
   });
   return result;

@@ -1,5 +1,5 @@
 import { preflopContextSchema } from "@poker-trainer/contracts";
-import { validateNormalizedEnvelope, type NormalizedEnvelope } from "./normalized.js";
+import { strategyDiversityReport, validateNormalizedEnvelope, type NormalizedEnvelope } from "./normalized.js";
 
 type ProviderOptions = {
   spotId?: string;
@@ -51,6 +51,10 @@ function comboCategory(combo: string): "pair" | "suited" | "offsuit" {
   return firstSuit === secondSuit ? "suited" : "offsuit";
 }
 
+function comboVariants(combo: string): string[] {
+  return [combo, `${combo.slice(2)}${combo.slice(0, 2)}`];
+}
+
 function basisPointFrequencies(value: unknown, actionOrder: string[], combo: string): Record<string, number> {
   if (!value || typeof value !== "object") throw new Error(`provider frequencies are missing for ${combo}`);
   const values = actionOrder.map((id) => {
@@ -59,10 +63,26 @@ function basisPointFrequencies(value: unknown, actionOrder: string[], combo: str
     return number;
   });
   const total = values.reduce((sum, number) => sum + number, 0);
-  const scale = Math.abs(total - 1) < 1e-6 ? 10_000 : 1;
-  const result = Object.fromEntries(values.map((number, index) => [actionOrder[index]!, Math.round(number * scale)]));
-  const remainder = 10_000 - Object.values(result).reduce((sum, number) => sum + number, 0);
-  if (remainder !== 0) result[actionOrder.at(-1)!] = (result[actionOrder.at(-1)!] ?? 0) + remainder;
+  if (!Number.isFinite(total) || total <= 0) throw new Error(`provider frequencies total is invalid for ${combo}`);
+
+  // Native floating-point vectors can total a few ulps above or below one.
+  // Rounding each action independently and putting the correction on the
+  // final action can turn a tiny positive frequency into -1 basis point.
+  // Normalize first, floor every quota, then distribute the remaining points
+  // by largest fractional remainder with action order as the stable tie-break.
+  const quotas = values.map((number) => (number / total) * 10_000);
+  const apportioned = quotas.map(Math.floor);
+  const remaining = 10_000 - apportioned.reduce((sum, number) => sum + number, 0);
+  const remainderOrder = quotas
+    .map((quota, index) => ({ index, fraction: quota - apportioned[index]! }))
+    .sort((left, right) => right.fraction - left.fraction || left.index - right.index);
+  for (let offset = 0; offset < remaining; offset += 1) {
+    const index = remainderOrder[offset]!.index;
+    apportioned[index] = apportioned[index]! + 1;
+  }
+  const result = Object.fromEntries(
+    actionOrder.map((id, index) => [id, apportioned[index]!] as const),
+  );
   return result;
 }
 
@@ -176,8 +196,8 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const actionOrder = Array.isArray(strategy?.actionOrder) ? strategy.actionOrder.map(String) : legalActions.map((action) => String(action.id));
   const rawByCombo = strategy?.byCombo;
   if (!rawByCombo || typeof rawByCombo !== "object") throw new Error("provider strategy.byCombo is missing");
-  const featuredCombo = typeof providerPublic.featuredCombo === "string" ? providerPublic.featuredCombo : Object.keys(rawByCombo)[0];
-  if (!featuredCombo) throw new Error("provider featured combo is missing");
+  const requestedFeaturedCombo = typeof providerPublic.featuredCombo === "string" ? providerPublic.featuredCombo : Object.keys(rawByCombo)[0];
+  if (!requestedFeaturedCombo) throw new Error("provider featured combo is missing");
   const byCombo = Object.fromEntries(Object.entries(rawByCombo).map(([combo, raw]) => {
     if (!raw || typeof raw !== "object") throw new Error(`provider strategy for ${combo} is malformed`);
     const item = raw as Record<string, unknown>;
@@ -188,9 +208,17 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const rawSelectable = Array.isArray(providerPublic.selectableCombos)
     ? providerPublic.selectableCombos.map((entry) => typeof entry === "string" ? entry : (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).combo === "string" ? (entry as Record<string, unknown>).combo as string : ""))
     : Object.keys(byCombo);
-  const selectableCombos = Array.from(new Set([featuredCombo, ...rawSelectable]))
-    .filter((combo) => comboPattern.test(combo) && Object.hasOwn(byCombo, combo));
+  const requestedCombos = Array.from(new Set([requestedFeaturedCombo, ...rawSelectable]));
+  const selectableCombos = requestedCombos.map((combo) => {
+    if (!comboPattern.test(combo)) throw new Error(`provider selectable combo is invalid: ${combo}`);
+    const resolved = comboVariants(combo).find((variant) => Object.hasOwn(byCombo, variant));
+    if (!resolved) throw new Error(`provider selectable combo ${combo} has no exact strategy entry`);
+    return resolved;
+  }).filter((combo, index, values) => values.indexOf(combo) === index);
   if (!selectableCombos.length) throw new Error("provider selectable combo catalog is empty");
+  const featuredCombo = comboVariants(requestedFeaturedCombo).find((variant) => selectableCombos.includes(variant));
+  if (!featuredCombo) throw new Error(`provider featured combo ${requestedFeaturedCombo} has no exact strategy entry`);
+  const selectableStrategies = Object.fromEntries(selectableCombos.map((combo) => [combo, byCombo[combo]!])) as Record<string, { frequencies: Record<string, number> }>;
   const rawPresentation = providerPublic.presentation && typeof providerPublic.presentation === "object" ? providerPublic.presentation as Record<string, unknown> : {};
   const positions = rawPresentation.positions && typeof rawPresentation.positions === "object" ? rawPresentation.positions as Record<string, unknown> : {};
   const presentation = {
@@ -237,6 +265,7 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
       normalizerVersion: "provider-python-v3",
       selectionRankingVersion: "1",
       ...(configurationHash ? { configurationHash } : {}),
+      strategyDiversity: strategyDiversityReport(actionOrder, selectableStrategies),
     },
   };
   return validateNormalizedEnvelope(normalized);

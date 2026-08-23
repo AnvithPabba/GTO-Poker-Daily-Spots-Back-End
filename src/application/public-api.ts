@@ -27,6 +27,24 @@ export type Visitor =
 
 type PrivateSolution = { actionOrder: string[]; byCombo: Record<string, { frequencies: Record<string, number> }> };
 
+/**
+ * Resolve one exact two-card holding from the immutable private solution.
+ *
+ * Solver providers can serialize the same holding in either card order.  The
+ * resolver therefore checks only the submitted canonical spelling and its
+ * reversed spelling.  It deliberately has no featured-hand or first-entry
+ * fallback: scoring a different holding would silently corrupt a result.
+ */
+export function resolveExactComboStrategy(
+  solution: PrivateSolution,
+  combo: string,
+): { frequencies: Record<string, number> } | undefined {
+  const direct = solution.byCombo[combo];
+  if (direct) return direct;
+  const reversed = `${combo.slice(2)}${combo.slice(0, 2)}`;
+  return solution.byCombo[reversed];
+}
+
 function ownerWhere(visitor: Visitor) {
   return visitor.kind === "guest" ? { guestIdentityId: visitor.identityId } : { accountId: visitor.accountId };
 }
@@ -90,7 +108,7 @@ export class PublicApplicationService {
     const published = slots ?? await this.slotsFor(date);
     const versionIds = published.map((slot) => slot.spotVersionId);
     const attempts = versionIds.length ? await this.prisma.attempt.findMany({
-      where: { ...ownerWhere(visitor), official: true, spotVersionId: { in: versionIds } },
+      where: { ...ownerWhere(visitor), official: true, validity: "VALID", spotVersionId: { in: versionIds } },
       select: { spotVersionId: true, scorePoints: true },
     }) : [];
     const byVersion = new Map(attempts.map((attempt) => [attempt.spotVersionId, attempt]));
@@ -125,7 +143,7 @@ export class PublicApplicationService {
     if (!slots.length) throw new AppError("SPOT_NOT_AVAILABLE", "daily game is not available", 404, { requestedDate });
     const progress = await this.progressFor(servedDate, visitor, slots);
     const completed = new Map((await this.prisma.attempt.findMany({
-      where: { ...ownerWhere(visitor), official: true, spotVersionId: { in: slots.map((slot) => slot.spotVersionId) } },
+      where: { ...ownerWhere(visitor), official: true, validity: "VALID", spotVersionId: { in: slots.map((slot) => slot.spotVersionId) } },
       select: { spotVersionId: true, scorePoints: true },
     })).map((attempt) => [attempt.spotVersionId, attempt.scorePoints]));
     return dailyGameSchema.parse({
@@ -157,7 +175,7 @@ export class PublicApplicationService {
       orderBy: [{ publicationDate: "asc" }, { slotOrder: "asc" }],
     });
     const attempts = slots.length ? await this.prisma.attempt.findMany({
-      where: { ...ownerWhere(visitor), official: true, spotVersionId: { in: slots.map((slot) => slot.spotVersionId) } },
+      where: { ...ownerWhere(visitor), official: true, validity: "VALID", spotVersionId: { in: slots.map((slot) => slot.spotVersionId) } },
       select: { spotVersionId: true, scorePoints: true },
     }) : [];
     const byVersion = new Map(attempts.map((attempt) => [attempt.spotVersionId, attempt.scorePoints]));
@@ -201,7 +219,7 @@ export class PublicApplicationService {
     }
     const solution = version.privateSolutionPayload as unknown as PrivateSolution;
     const hands = request.hands.map((hand) => {
-      const frequencies = solution.byCombo[hand.combo]?.frequencies;
+      const frequencies = resolveExactComboStrategy(solution, hand.combo)?.frequencies;
       if (!frequencies) throw new AppError("HAND_NOT_ALLOWED", "solution is unavailable for submitted hand", 400, { combo: hand.combo });
       const scored = scoreHands(solution.actionOrder, hand.allocations, frequencies);
       return { ...scored, combo: hand.combo, similarityBasisPoints: Math.round(scored.similarity * 100) };
@@ -261,6 +279,13 @@ export class PublicApplicationService {
     if (!attempt) throw new AppError("ATTEMPT_NOT_FOUND", "attempt not found", 404);
     const owns = visitor.kind === "guest" ? attempt.guestIdentityId === visitor.identityId : attempt.accountId === visitor.accountId;
     if (!owns) throw new AppError("ATTEMPT_FORBIDDEN", "attempt belongs to another visitor", 403);
+    if (attempt.validity === "INVALIDATED") {
+      throw new AppError("ATTEMPT_INVALIDATED", "this result was invalidated because the published solver version was replaced", 410, {
+        spotId: attempt.spotId,
+        replacementSpotVersionId: attempt.replacementSpotVersionId,
+        reason: attempt.invalidationReason,
+      });
+    }
     const core = attempt.resultPayload as unknown as Omit<AttemptResource, "attemptId" | "spotId" | "spotVersionId" | "createdAt" | "attemptKind" | "progress">;
     return attemptResourceSchema.parse({ ...core, attemptId: attempt.id, spotId: attempt.spotId, spotVersionId: attempt.spotVersionId, createdAt: attempt.createdAt.toISOString(), attemptKind: attempt.official ? "official" : "practice", progress: await this.progressFor(await this.publicationDateFor(attempt.spotVersionId), visitor) });
   }
@@ -268,7 +293,7 @@ export class PublicApplicationService {
   public async getAttemptHistory(visitor: Visitor, limit: number, cursor?: string) {
     const decoded = cursor ? Buffer.from(cursor, "base64url").toString("utf8").split("|") : undefined;
     const rows = await this.prisma.attempt.findMany({
-      where: { ...ownerWhere(visitor), ...(decoded?.length === 2 ? { OR: [{ createdAt: { lt: new Date(decoded[0]!) } }, { createdAt: new Date(decoded[0]!), id: { lt: decoded[1]! } }] } : {}) },
+      where: { ...ownerWhere(visitor), validity: "VALID", ...(decoded?.length === 2 ? { OR: [{ createdAt: { lt: new Date(decoded[0]!) } }, { createdAt: new Date(decoded[0]!), id: { lt: decoded[1]! } }] } : {}) },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1,
     });
     const page = rows.slice(0, limit);
@@ -278,7 +303,7 @@ export class PublicApplicationService {
 
   public async getStats(visitor: Visitor) {
     const attempts = await this.prisma.attempt.findMany({
-      where: { ...ownerWhere(visitor), official: true },
+      where: { ...ownerWhere(visitor), official: true, validity: "VALID" },
       select: { spotVersionId: true, createdAt: true, similarityBasisPoints: true, spotVersion: { select: { publicPayload: true } } },
     });
     const slots = await this.prisma.publicationSlot.findMany({ where: { status: PublicationSlotStatus.PUBLISHED }, orderBy: { publicationDate: "asc" } });

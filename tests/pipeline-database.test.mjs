@@ -10,7 +10,7 @@ const databaseUrl = process.env.DATABASE_URL;
 test("validated pipeline persists split payloads idempotently and rejects conflicting versions", { skip: !databaseUrl && "DATABASE_URL is not set" }, async () => {
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   const suffix = `pipeline_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-  const ids = { template: `${suffix}_template`, job: `${suffix}_job`, retryJob: `${suffix}_retry`, spot: `${suffix}_spot`, version: `${suffix}_version` };
+  const ids = { template: `${suffix}_template`, job: `${suffix}_job`, retryJob: `${suffix}_retry`, siblingJob: `${suffix}_sibling_job`, spot: `${suffix}_spot`, siblingSpot: `${suffix}_sibling_spot`, version: `${suffix}_version`, siblingVersion: `${suffix}_sibling_version` };
   const sourceHash = "e".repeat(64);
   const publicPayload = {
     schemaVersion: 3, spotId: ids.spot, spotVersionId: ids.version, publicationDate: "2026-08-21", slotOrder: 1,
@@ -40,15 +40,27 @@ test("validated pipeline persists split payloads idempotently and rejects confli
     assert.equal((await prisma.solverRun.count({ where: { jobId: ids.job } })), 1);
     assert.equal((await prisma.solverJob.findUniqueOrThrow({ where: { id: ids.retryJob } })).status, "SUCCEEDED");
 
+    // A single native solve can export several decision nodes. Its immutable
+    // SolverRun must be reused instead of violating outputSha256 uniqueness.
+    await prisma.solverJob.create({ data: { id: ids.siblingJob, templateId: ids.template, effectiveSeed: `${suffix}:sibling`, updatedAt: new Date() } });
+    const siblingEnvelope = structuredClone(envelope);
+    siblingEnvelope.publicPayload.spotId = ids.siblingSpot;
+    siblingEnvelope.publicPayload.spotVersionId = ids.siblingVersion;
+    const sibling = await persistValidatedDraft(prisma, { ...baseInput, jobId: ids.siblingJob }, siblingEnvelope, { title: "Sibling node from same solve" });
+    assert.equal(sibling.run.id, first.run.id);
+    assert.equal(sibling.version.solverRunId, first.run.id);
+    assert.equal(await prisma.solverRun.count({ where: { outputSha256: baseInput.outputSha256 } }), 1);
+    assert.equal((await prisma.solverJob.findUniqueOrThrow({ where: { id: ids.siblingJob } })).status, "SUCCEEDED");
+
     const conflict = structuredClone(envelope);
     conflict.privateSolutionPayload.byCombo.AhAs.reachWeight = 0.5;
     await assert.rejects(() => persistValidatedDraft(prisma, { ...baseInput, jobId: ids.retryJob }, conflict, { title: "Pipeline test spot" }), /already exists with different content/);
   } finally {
-    await prisma.solverJob.updateMany({ where: { id: { in: [ids.job, ids.retryJob] } }, data: { successfulRunId: null } });
-    await prisma.spotVersion.deleteMany({ where: { id: ids.version } });
-    await prisma.spot.deleteMany({ where: { id: ids.spot } });
-    await prisma.solverRun.deleteMany({ where: { jobId: { in: [ids.job, ids.retryJob] } } });
-    await prisma.solverJob.deleteMany({ where: { id: { in: [ids.job, ids.retryJob] } } });
+    await prisma.solverJob.updateMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob] } }, data: { successfulRunId: null } });
+    await prisma.spotVersion.deleteMany({ where: { id: { in: [ids.version, ids.siblingVersion] } } });
+    await prisma.spot.deleteMany({ where: { id: { in: [ids.spot, ids.siblingSpot] } } });
+    await prisma.solverRun.deleteMany({ where: { jobId: { in: [ids.job, ids.retryJob, ids.siblingJob] } } });
+    await prisma.solverJob.deleteMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob] } } });
     await prisma.solverTemplate.deleteMany({ where: { id: ids.template } });
     await prisma.$disconnect();
   }

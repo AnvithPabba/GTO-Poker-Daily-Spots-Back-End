@@ -239,6 +239,8 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 - Input/output SHA-256, archive input/output/log references, archive verification timestamp.
 - Normalizer/selector versions and structured failure details.
 - Unique `(jobId, attemptNumber)` and unique successful output checksum where appropriate.
+- Multiple spot nodes exported from one raw solve reuse the checksum-identified
+  `SolverRun`; each node still becomes its own immutable `SpotVersion`.
 
 ### `Spot`
 
@@ -279,6 +281,10 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 - Validated submission JSONB, result JSONB, overall score.
 - `metricKey`, `metricVersion`, `aggregatorKey`, `aggregatorVersion`.
 - Created timestamp and optional request metadata that respects privacy policy.
+- `validity` (`VALID` or `INVALIDATED`), invalidation timestamp/reason, and an
+  optional replacement spot-version ID. Invalidated attempts remain immutable
+  audit records but are excluded from progress, history, streaks, and stats;
+  refreshing one returns `410 ATTEMPT_INVALIDATED`.
 - Unique `(guestSessionId, spotVersionId, idempotencyKey)`.
 - A database-enforced partial unique constraint for one official attempt per `(guestSessionId, spotVersionId)`; add with SQL migration if Prisma cannot express it directly.
 - Indexes for guest archive completion/history and spot analytics.
@@ -286,6 +292,13 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 `Account` stores the provider subject, optional email, and role JSON. Its
 official-attempt uniqueness and idempotency constraints mirror the guest
 constraints while retaining separate histories.
+
+The generated Prisma client is derived from `prisma/schema.prisma`. The
+backend package runs `prisma generate` before `build`, `typecheck`, and `test`
+to prevent schema/client drift after a migration is added. `db:generate` is
+also available as an explicit repair/check command; it only regenerates types
+and never applies a migration. The Node test suite checks that these generation
+hooks and the `AttemptValidity` migration remain paired.
 
 Lifecycle/audit events may use a separate append-only audit table during implementation. They should not be overloaded into mutable JSON logs on these records.
 

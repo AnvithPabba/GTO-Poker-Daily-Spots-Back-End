@@ -12,7 +12,7 @@ describe("OpenAPI documentation", () => {
 
     // Assert
     expect(checkedIn).toEqual(generated);
-    expect(generated.info.version).toBe("0.3.0");
+    expect(generated.info.version).toBe("0.3.1");
   });
 
   it("documents every public application route exactly once", () => {

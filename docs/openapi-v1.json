@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Poker Daily Trainer API",
-    "version": "0.3.0"
+    "version": "0.3.1"
   },
   "servers": [
     {
@@ -351,6 +351,7 @@
                   "SPOT_NOT_AVAILABLE",
                   "ATTEMPT_NOT_FOUND",
                   "ATTEMPT_FORBIDDEN",
+                  "ATTEMPT_INVALIDATED",
                   "FEATURED_HAND_REQUIRED",
                   "HAND_NOT_ALLOWED",
                   "ACTION_NOT_ALLOWED",

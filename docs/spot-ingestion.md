@@ -46,6 +46,13 @@ TexasSolver, and a deterministic configuration hash separate from the raw
 artifact hash. Ingestion validates this provenance and copies only the public
 preflop story and hand-class assumptions into the v3 public payload.
 
+The native process must be started with the TexasSolver provider bundle as its
+working directory. TexasSolver v0.2.0 loads runtime resources relative to
+`cwd`; inheriting the separate `Solver/` directory can produce a completed log
+and malformed uniform exact-hand strategies. The supported Python wrapper
+enforces this boundary. Do not replace it with an arbitrary `cat input.txt |
+console_solver` invocation from another directory.
+
 ## 2. Apply the database migration once
 
 The development migration is run by the database superuser, not either runtime
@@ -55,6 +62,14 @@ role. From `webapp/backend`:
 DATABASE_URL='postgresql://postgres:<superuser-password>@127.0.0.1:55432/poker_trainer_dev' \
   corepack pnpm db:migrate
 ```
+
+The migration adds `AttemptValidity` plus the invalidation metadata used when
+an immutable solver version is replaced. The TypeScript client is generated
+from the same schema; `build`, `typecheck`, and `test` run `prisma generate`
+automatically. If an import command reports that Prisma does not know a field
+such as `validity`, run `corepack pnpm db:generate` in `webapp/backend` and
+retry. This fixes generated types only; `db:migrate` is still required to
+change the database.
 
 The API role (`trainer_api`) can create spot records after the migration; the
 worker role (`solver_worker`) is for queue/host-worker access. Neither is a
@@ -149,27 +164,90 @@ scenario's story. Numeric bet sizes come from the configuration/provenance and
 are emitted as payload data; the API and frontend never use action method
 aliases such as `oop_bet_25`.
 
+Before creating any database rows, ingestion validates the native log against
+the authored quality settings. It requires a post-minimum exploitability
+checkpoint and a final exploitability value at or below the configured target.
+The input, output, and log are archived even when this gate rejects the run;
+the rejection report is stored beside them for diagnosis. A rejected run never
+creates a `SpotVersion`.
+
+The importer records a strategy-diversity diagnostic and enforces a semantic
+publication gate. It rejects a large reached range whose exact combos all
+collapse to one basis-point vector, as well as the observed multi-action
+failure where every combo is 100% all-in. This catches invalid TexasSolver
+v0.2.0 output even when its log reports near-zero exploitability. Narrow,
+legitimately pure nodes are not rejected merely for being pure.
+
+Provider floating-point frequencies are normalized per exact combo and
+converted to 10,000 basis points with deterministic largest-remainder
+apportionment. This preserves nonnegative actions and an exact total even when
+the native vector is a few floating-point units above or below one. No rounding
+correction is assigned blindly to the last action.
+
 Use a new `--spot-version-id` for a new immutable version of an existing
 `--spot-id`. Re-running the same version with identical public/private hashes
 is idempotent; a different payload with an existing version ID is rejected.
 The command prints the `templateId`, `jobId`, `solverRunId`, `spotId`, and
 `spotVersionId`. Keep those IDs in the authoring log.
 
+Several selected spots may originate from the same `output_result.json`.
+Because `SolverRun.outputSha256` identifies the immutable native output, later
+imports reuse that existing `SolverRun` after verifying the input, log, and
+source identities. They create new `SpotVersion` rows; they do not create a
+duplicate run or fail the unique output-checksum constraint.
+
+Raw source artifacts are append-only. If the same raw run is retried after an
+importer fix, a different import metadata observation is stored under a
+content-addressed `metadata-<sha256>.json` key rather than overwriting the
+earlier rejection record or blocking the retry.
+
 To repair an already-published spot, import the corrected envelope with the
-same logical `--spot-id` and a new version ID. Approve it, then retarget the
-existing publication slot without editing the old JSON:
+same logical `--spot-id` and a new version ID. The repair command performs the
+approval, retargets the existing publication slot, and invalidates attempts
+against the superseded version in one transaction:
 
 ```bash
-corepack pnpm spot:manage -- approve --spot-version-id '<new-version-id>'
-corepack pnpm spot:manage -- replace \
-  --old-version-id '<currently-published-version-id>' \
-  --new-version-id '<new-version-id>'
-corepack pnpm spot:manage -- publish --date '<existing-publication-date>'
+DATABASE_URL='postgresql://trainer_api:<app-password>@127.0.0.1:55432/poker_trainer_dev' \
+  corepack pnpm spot:repair -- \
+    --envelope '../../SolverOutputs/<solve-sha>/spots/<spot-id>/provider-envelope.json' \
+    --input '../../SolverOutputs/<solve-sha>/input.txt' \
+    --output '../../SolverOutputs/<solve-sha>/output_result.json' \
+    --log '../../SolverOutputs/<solve-sha>/solver.log' \
+    --provenance '../../SolverOutputs/<solve-sha>/configuration.json' \
+    --title 'Corrected flop decision' \
+    --family 'srp-default' \
+    --old-version-id '<currently-published-version-id>' \
+    --new-version-id '<new-immutable-version-id>'
 ```
 
-`replace` cancels the old slot, marks the old version `SUPERSEDED`, and
-creates a scheduled slot for the replacement at the same date/order. The old
-version remains immutable for audit purposes and is no longer served.
+`spot:repair` refuses a candidate whose exact-combo vectors all collapse to one
+basis-point vector. This safety check cannot be bypassed from the command line;
+investigate or replace the native solver artifact instead. It cancels the old
+slot, marks the old version
+`SUPERSEDED`, invalidates its attempts (which remain available for audit), and
+creates a scheduled slot for the replacement at the same date/order. It then
+publishes that date. Invalidated attempts are excluded from progress, history,
+streaks, and statistics; refreshing one returns `410 ATTEMPT_INVALIDATED`
+without the stale GTO comparison.
+
+When no corrected version exists yet, remove the misleading version from
+public serving without deleting audit data:
+
+```bash
+corepack pnpm spot:manage -- quarantine \
+  --spot-version-id '<bad-version-id>' \
+  --reason 'native solver emitted a collapsed uniform strategy'
+```
+
+Quarantine cancels active publication slots, marks the version `SUPERSEDED`,
+archives the logical spot when it was current, invalidates affected attempts,
+and records an `AdminAudit` event. A refreshed invalid attempt returns
+`410 ATTEMPT_INVALIDATED` rather than its stale comparison.
+
+For a manually prepared, already-approved replacement, the lower-level
+management commands remain available. Pass `--invalidate --reason ...` to the
+`replace` command when the old attempts must be invalidated, then publish the
+existing date.
 
 If you already have a normalized application envelope (rather than the
 provider envelope generated by `path-select.py`), it must still contain the

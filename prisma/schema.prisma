@@ -46,6 +46,11 @@ enum SpotVersionStatus {
   SUPERSEDED
 }
 
+enum AttemptValidity {
+  VALID
+  INVALIDATED
+}
+
 enum PublicationSlotStatus {
   SCHEDULED
   HELD
@@ -248,27 +253,31 @@ model Account {
 }
 
 model Attempt {
-  id                     String   @id @default(cuid())
-  guestSessionId         String?
-  guestIdentityId        String?
-  accountId              String?
-  spotId                 String
-  spotVersionId          String
-  official               Boolean  @default(false)
-  practiceOrdinal        Int      @default(0)
-  idempotencyKey         String
-  idempotencyPayloadHash String   @default("")
-  submittedPayload       Json
-  resultPayload          Json
-  overallSimilarity      Float
-  similarityBasisPoints  Int      @default(0)
-  scorePoints            Int      @default(0)
-  metricKey              String
-  metricVersion          Int
-  aggregatorKey          String
-  aggregatorVersion      Int
-  createdAt              DateTime @default(now())
-  requestMetadata        Json?
+  id                       String          @id @default(cuid())
+  guestSessionId           String?
+  guestIdentityId          String?
+  accountId                String?
+  spotId                   String
+  spotVersionId            String
+  official                 Boolean         @default(false)
+  practiceOrdinal          Int             @default(0)
+  idempotencyKey           String
+  idempotencyPayloadHash   String          @default("")
+  submittedPayload         Json
+  resultPayload            Json
+  overallSimilarity        Float
+  similarityBasisPoints    Int             @default(0)
+  scorePoints              Int             @default(0)
+  metricKey                String
+  metricVersion            Int
+  aggregatorKey            String
+  aggregatorVersion        Int
+  createdAt                DateTime        @default(now())
+  requestMetadata          Json?
+  validity                 AttemptValidity @default(VALID)
+  invalidatedAt            DateTime?
+  invalidationReason       String?
+  replacementSpotVersionId String?
 
   guestSession  GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
   guestIdentity GuestIdentity? @relation(fields: [guestIdentityId], references: [id], onDelete: Restrict)
@@ -284,6 +293,7 @@ model Attempt {
   @@index([accountId, createdAt])
   @@index([spotVersionId, createdAt])
   @@index([spotId, createdAt])
+  @@index([validity, createdAt])
 }
 
 model AdminAudit {

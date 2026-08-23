@@ -64,6 +64,24 @@ test("archive is content-addressed, append-only, and checksum verified", async (
   await assert.rejects(() => verifyArchive(root, archived), /checksum mismatch/);
 });
 
+test("archive preserves conflicting metadata observations as append-only versions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "poker-archive-metadata-"));
+  const source = [
+    { name: "input.txt", content: "set_pot 50\n" },
+    { name: "output_result.json", content: "{\"node\":true}\n" },
+    { name: "solver.log", content: "completed\n" },
+  ];
+
+  const rejected = await archiveRun(root, [...source, { name: "metadata.json", content: "{\"status\":\"rejected\"}" }]);
+  const accepted = await archiveRun(root, [...source, { name: "metadata.json", content: "{\"status\":\"accepted\"}" }]);
+
+  assert.equal(rejected.sourceHash, accepted.sourceHash);
+  assert.notEqual(rejected.artifacts["metadata.json"].key, accepted.artifacts["metadata.json"].key);
+  assert.match(accepted.artifacts["metadata.json"].key, /metadata-[a-f0-9]{64}\.json$/);
+  await verifyArchive(root, rejected);
+  await verifyArchive(root, accepted);
+});
+
 test("normalized envelope enforces action identity, sums, and public/private boundary", () => {
   const valid = validateNormalizedEnvelope(envelope());
   assert.equal(payloadSha256(valid.publicPayload), payloadSha256({ ...valid.publicPayload }));

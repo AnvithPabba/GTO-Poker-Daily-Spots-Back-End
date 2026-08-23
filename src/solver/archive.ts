@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 export type ArchiveArtifact = { name: "input.txt" | "output_result.json" | "solver.log" | "metadata.json"; content: string | Uint8Array };
 export type ArchivedRun = {
@@ -37,20 +37,37 @@ export async function archiveRun(root: string, artifacts: ArchiveArtifact[]): Pr
   await mkdir(directory, { recursive: true });
   const result = {} as ArchivedRun["artifacts"];
   for (const artifact of artifacts) {
-    const destination = join(directory, artifact.name);
+    let destination = join(directory, artifact.name);
     assertSafeRoot(root, destination);
     const bytes = typeof artifact.content === "string" ? Buffer.byteLength(artifact.content) : artifact.content.byteLength;
     const digest = sha256(artifact.content);
     try {
       const existing = await readFile(destination);
-      if (sha256(existing) !== digest) throw new Error(`conflicting archive replacement for ${artifact.name}`);
+      if (sha256(existing) !== digest) {
+        if (artifact.name !== "metadata.json") throw new Error(`conflicting archive replacement for ${artifact.name}`);
+        // Source artifacts define the immutable run identity. Metadata records
+        // an import observation and can legitimately change when a previously
+        // rejected run is retried after importer fixes. Keep both records
+        // append-only instead of overwriting the first one or blocking retry.
+        destination = join(directory, `metadata-${digest}.json`);
+        assertSafeRoot(root, destination);
+        try {
+          const existingVersion = await readFile(destination);
+          if (sha256(existingVersion) !== digest) throw new Error("conflicting archive replacement for versioned metadata.json");
+        } catch (versionError: unknown) {
+          if (versionError instanceof Error && versionError.message.startsWith("conflicting archive")) throw versionError;
+          const temporary = `${destination}.tmp-${process.pid}-${Date.now()}`;
+          await writeFile(temporary, artifact.content, { flag: "wx" });
+          await rename(temporary, destination);
+        }
+      }
     } catch (error: unknown) {
       if (error instanceof Error && error.message.startsWith("conflicting archive")) throw error;
       const temporary = `${destination}.tmp-${process.pid}-${Date.now()}`;
       await writeFile(temporary, artifact.content, { flag: "wx" });
       await rename(temporary, destination);
     }
-    result[artifact.name] = { key: `solver-runs/sha256/${hash}/${artifact.name}`, sha256: digest, bytes };
+    result[artifact.name] = { key: `solver-runs/sha256/${hash}/${basename(destination)}`, sha256: digest, bytes };
   }
   return { sourceHash: hash, artifacts: result };
 }

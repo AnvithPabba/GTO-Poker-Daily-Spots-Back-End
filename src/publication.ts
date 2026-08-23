@@ -94,7 +94,12 @@ export async function scheduleSpotVersion(prisma: PrismaClient, versionId: strin
  * The old version is retained as SUPERSEDED and the replacement is scheduled
  * into the same Pacific date/order for the normal publication transaction.
  */
-export async function replacePublishedSlot(prisma: PrismaClient, oldVersionId: string, newVersionId: string) {
+export async function replacePublishedSlot(
+  prisma: PrismaClient,
+  oldVersionId: string,
+  newVersionId: string,
+  invalidation?: { reason: string; actor?: string },
+) {
   if (oldVersionId === newVersionId) throw new Error("replacement versions must be different");
   return prisma.$transaction(async (tx) => {
     const oldVersion = await tx.spotVersion.findUniqueOrThrow({ where: { id: oldVersionId } });
@@ -106,9 +111,74 @@ export async function replacePublishedSlot(prisma: PrismaClient, oldVersionId: s
     if (!oldSlot) throw new Error("old version has no published slot to replace");
     await tx.publicationSlot.update({ where: { id: oldSlot.id }, data: { status: PublicationSlotStatus.CANCELLED, cancelledAt: new Date() } });
     await tx.spotVersion.update({ where: { id: oldVersionId }, data: { status: SpotVersionStatus.SUPERSEDED, supersededAt: new Date() } });
+    const invalidated = invalidation
+      ? await tx.attempt.updateMany({
+        where: { spotVersionId: oldVersionId, validity: "VALID" },
+        data: {
+          validity: "INVALIDATED",
+          invalidatedAt: new Date(),
+          invalidationReason: invalidation.reason,
+          replacementSpotVersionId: newVersionId,
+        },
+      })
+      : { count: 0 };
+    if (invalidation) {
+      await tx.adminAudit.create({
+        data: {
+          actor: invalidation.actor ?? "local-repair",
+          operation: "replace_invalid_solver_version",
+          targetId: oldVersionId,
+          metadata: { replacementSpotVersionId: newVersionId, invalidatedAttempts: invalidated.count, reason: invalidation.reason },
+        },
+      });
+    }
     const slot = await tx.publicationSlot.create({ data: { publicationDate: oldSlot.publicationDate, slotOrder: oldSlot.slotOrder, spotVersionId: newVersionId, status: PublicationSlotStatus.SCHEDULED } });
     await tx.spotVersion.update({ where: { id: newVersionId }, data: { status: SpotVersionStatus.SCHEDULED, scheduledAt: new Date() } });
-    return { oldVersionId, newVersionId, slot };
+    return { oldVersionId, newVersionId, slot, invalidatedAttempts: invalidated.count };
+  });
+}
+
+/**
+ * Remove a proven-bad published solver version from serving when no validated
+ * replacement exists yet. Data and attempts are retained for audit, while
+ * stale results are explicitly invalidated instead of being silently
+ * rescored. A later corrected solve should be imported as a new immutable
+ * version and scheduled normally (or through replacePublishedSlot when the
+ * old slot is still available).
+ */
+export async function quarantinePublishedVersion(
+  prisma: PrismaClient,
+  versionId: string,
+  reason: string,
+  actor = "local-quality-gate",
+) {
+  if (!reason.trim()) throw new Error("quarantine reason is required");
+  return prisma.$transaction(async (tx) => {
+    const version = await tx.spotVersion.findUniqueOrThrow({ where: { id: versionId } });
+    if (version.status !== SpotVersionStatus.PUBLISHED) throw new Error("only a published version can be quarantined");
+    const now = new Date();
+    const slots = await tx.publicationSlot.updateMany({
+      where: { spotVersionId: versionId, status: { in: [PublicationSlotStatus.SCHEDULED, PublicationSlotStatus.HELD, PublicationSlotStatus.PUBLISHED] } },
+      data: { status: PublicationSlotStatus.CANCELLED, cancelledAt: now },
+    });
+    await tx.spotVersion.update({ where: { id: versionId }, data: { status: SpotVersionStatus.SUPERSEDED, supersededAt: now } });
+    const invalidated = await tx.attempt.updateMany({
+      where: { spotVersionId: versionId, validity: "VALID" },
+      data: { validity: "INVALIDATED", invalidatedAt: now, invalidationReason: reason },
+    });
+    const spot = await tx.spot.findUniqueOrThrow({ where: { id: version.spotId } });
+    if (spot.currentVersionId === versionId) {
+      await tx.spot.update({ where: { id: spot.id }, data: { status: SpotStatus.ARCHIVED, currentVersionId: null } });
+    }
+    await tx.adminAudit.create({
+      data: {
+        actor,
+        operation: "quarantine_invalid_solver_version",
+        targetId: versionId,
+        metadata: { reason, cancelledSlots: slots.count, invalidatedAttempts: invalidated.count },
+      },
+    });
+    return { versionId, spotId: version.spotId, cancelledSlots: slots.count, invalidatedAttempts: invalidated.count };
   });
 }
 

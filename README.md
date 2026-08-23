@@ -17,10 +17,31 @@ pnpm test:unit
 pnpm test:load
 ```
 
-The backend consumes the reviewed `@poker-trainer/contracts@0.3.0` tarball from
+The full `pnpm test` command includes a schema-drift regression test. It checks
+that `prisma generate` remains a pre-step for every TypeScript compile/test
+entry point and that the `AttemptValidity` model fields remain paired with the
+committed migration.
+
+The backend consumes the reviewed `@poker-trainer/contracts@0.3.1` tarball from
 `vendor/`, making this repository and Docker build independent of sibling
 source. npm publication still requires explicit approval; after publication,
-replace the tarball spec with exact registry version `0.3.0`.
+replace the tarball spec with exact registry version `0.3.1`.
+
+### Prisma schema/client synchronization
+
+`prisma/schema.prisma` is the source of truth for database types. Whenever the
+schema or a migration changes, regenerate the client with:
+
+```bash
+corepack pnpm db:generate
+```
+
+`build`, `typecheck`, and `test` run `prisma generate` automatically before
+compiling, so a stale client cannot silently enter a Docker image or solver
+import run. If TypeScript reports that a field is missing from a Prisma
+`WhereInput`, `Select`, or model (for example `Attempt.validity`), run
+`corepack pnpm db:generate` once and rerun the command. Applying migrations is
+separate; generation never changes the database.
 
 ## Layers and injected boundaries
 
