@@ -29,14 +29,7 @@ function required(options, keys) {
   for (const key of keys) if (!options[key]) throw new Error(`missing --${key}`);
 }
 
-const options = args(process.argv.slice(2));
-required(options, ["envelope", "input", "output", "log", "title", "family", "spot-id", "spot-version-id"]);
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-
-const prisma = createPrismaClient(process.env.DATABASE_URL);
-const archiveRoot = resolve(options["archive-root"] ?? process.env.SOLVER_OUTPUTS_DIR ?? "../../SolverOutputs");
-
-async function occupiedPublicationDates() {
+async function occupiedPublicationDates(prisma) {
   const slots = await prisma.publicationSlot.findMany({
     where: { status: { in: ["SCHEDULED", "HELD", "PUBLISHED"] } },
     select: { publicationDate: true },
@@ -44,19 +37,26 @@ async function occupiedPublicationDates() {
   return slots.map((slot) => dateText(slot.publicationDate));
 }
 
-async function chooseDate() {
+async function chooseDate(prisma, options) {
   if (options["publication-date"]) return options["publication-date"];
   const start = addPacificDays(pacificDate(new Date()), 1);
-  return nextAvailablePacificDate(start, await occupiedPublicationDates());
+  return nextAvailablePacificDate(start, await occupiedPublicationDates(prisma));
 }
 
+let prisma;
 try {
+  const options = args(process.argv.slice(2));
+  required(options, ["envelope", "input", "output", "log", "title", "family", "spot-id", "spot-version-id"]);
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+  prisma = createPrismaClient(process.env.DATABASE_URL);
+  const archiveRoot = resolve(options["archive-root"] ?? process.env.SOLVER_OUTPUTS_DIR ?? "../../SolverOutputs");
+
   // A retry of this exact command is safe: a scheduled or published immutable
   // version already has its date, so do not create another template/run or
   // accidentally move it to a later day.
   let version = await prisma.spotVersion.findUnique({ where: { id: options["spot-version-id"] }, include: { publicationSlots: true } });
   if (!version) {
-    const publicationDate = await chooseDate();
+    const publicationDate = await chooseDate(prisma, options);
     const result = await ingestSpot(prisma, {
       envelopePath: options.envelope,
       inputPath: options.input,
@@ -81,7 +81,7 @@ try {
   if (version.status === "APPROVED") {
     const publicationDate = typeof version.publicPayload?.publicationDate === "string"
       ? version.publicPayload.publicationDate
-      : await chooseDate();
+      : await chooseDate(prisma, options);
     const slot = await scheduleSpotVersion(prisma, version.id, publicationDate, 1);
     console.log(JSON.stringify({ action: "imported-and-scheduled", spotId: version.spotId, spotVersionId: version.id, publicationDate, slotOrder: slot.slotOrder, status: "SCHEDULED" }, null, 2));
   } else if (version.status === "SCHEDULED" || version.status === "PUBLISHED") {
@@ -94,5 +94,5 @@ try {
   console.error(`spot publish failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 } finally {
-  await prisma.$disconnect();
+  if (prisma) await prisma.$disconnect();
 }
