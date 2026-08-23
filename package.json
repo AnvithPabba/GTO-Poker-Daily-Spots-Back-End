@@ -17,6 +17,7 @@
     "spot:retire-synthetic": "npm run build && node scripts/retire-synthetic-spot.mjs",
     "spot:ingest": "node scripts/ingest-spot.mjs",
     "spot:publish": "node scripts/publish-spot.mjs",
+    "spot:list": "node scripts/list-spots.mjs",
     "spot:repair": "node scripts/repair-spot.mjs",
     "spot:manage": "node scripts/manage-spot.mjs",
     "spot:migrate-v3": "npm run build && node scripts/migrate-spots-v3.mjs",

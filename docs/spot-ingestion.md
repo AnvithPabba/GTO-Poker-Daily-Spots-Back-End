@@ -93,9 +93,42 @@ python3 texassolver_tech_demo.py \
 
 After you type `export`, the backend assigns slot 1 on the first unoccupied
 Pacific date starting tomorrow. Repeat the command to append the next spot to
-the next free date. Existing scheduled/published dates are never overwritten.
+the next free date. Existing scheduled/published dates are never overwritten
+unless the operator supplies both an exact date and the explicit replacement
+flag.
 The command derives a host-side `DATABASE_URL` from `webapp/.env` when one is
 not already exported; set `DATABASE_URL` explicitly for another database.
+
+Target an exact date, or intentionally replace its active slot 1:
+
+```bash
+python3 texassolver_tech_demo.py --config configs/2bet-pot-100bb.json \
+  --publish --publication-date 2026-08-27
+
+python3 texassolver_tech_demo.py --config configs/2bet-pot-100bb.json \
+  --publish --publication-date 2026-08-27 --replace-existing
+```
+
+The first command fails with the occupying immutable version ID when the date
+is not empty. Replacement cancels rather than deletes the old slot,
+supersedes the old version, invalidates stale attempts, writes `AdminAudit`,
+and gives the new version the same Pacific date/order. Published dates are
+republished immediately; future dates remain scheduled.
+
+Monitor the publication window before or after authoring:
+
+```bash
+# Default today -5 through +5 Pacific days
+python3 texassolver_tech_demo.py --list-spots
+
+# Exact inclusive range and replacement history
+python3 texassolver_tech_demo.py --list-spots \
+  --from-date 2026-08-01 --to-date 2026-08-31 --include-cancelled
+```
+
+The backend-native form is `corepack pnpm spot:list -- --before 5 --after 5`.
+Add `--json` for automation. The monitor reads PostgreSQL only and never opens
+the solver archive or exposes private solution payloads.
 
 If the import fails, the raw solve and exported bundle remain available and no
 publication slot is created. Fix the reported database/configuration issue

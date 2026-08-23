@@ -184,6 +184,18 @@ spot; cancelling before export or a failed import leaves no publication slot.
 The command uses `DATABASE_URL`, or derives the host-side Docker URL from
 `webapp/.env`.
 
+Use `--publication-date YYYY-MM-DD` to target an exact empty Pacific date, and
+add `--replace-existing` to deliberately replace an occupied slot 1. Monitor
+coverage without running the native solver:
+
+```bash
+python3 texassolver_tech_demo.py --list-spots
+python3 texassolver_tech_demo.py --list-spots --from-date 2026-08-01 --to-date 2026-08-31
+```
+
+The default monitor window is today ±5 Pacific days. The direct backend
+equivalent is `corepack pnpm spot:list -- --before 5 --after 5`.
+
 The equivalent manual commands remain available for operators who need to
 inspect each lifecycle transition:
 
