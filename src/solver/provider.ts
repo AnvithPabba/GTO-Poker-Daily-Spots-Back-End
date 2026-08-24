@@ -113,6 +113,21 @@ function providerPath(source: Record<string, unknown>): string[] {
   })];
 }
 
+function positionsFromPreflop(preflop: ReturnType<typeof preflopContextSchema.parse>): Partial<Record<"ip" | "oop", string>> {
+  if (preflop.status !== "known") return {};
+  const result: Partial<Record<"ip" | "oop", string>> = {};
+  for (const actor of ["ip", "oop"] as const) {
+    const positions = [...new Set(preflop.actions.filter((action) => action.actor === actor).map((action) => action.position.trim()).filter(Boolean))];
+    if (positions.length > 1) throw new Error(`provider preflop actions assign conflicting positions to ${actor}`);
+    if (positions[0]) result[actor] = positions[0];
+  }
+  return result;
+}
+
+function isGenericLanePosition(value: string, actor: "ip" | "oop"): boolean {
+  return value.toUpperCase() === actor.toUpperCase();
+}
+
 /**
  * Convert the native Solver Python envelope into the server's versioned
  * application envelope. This is the only provider-specific translation point;
@@ -219,23 +234,36 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const featuredCombo = comboVariants(requestedFeaturedCombo).find((variant) => selectableCombos.includes(variant));
   if (!featuredCombo) throw new Error(`provider featured combo ${requestedFeaturedCombo} has no exact strategy entry`);
   const selectableStrategies = Object.fromEntries(selectableCombos.map((combo) => [combo, byCombo[combo]!])) as Record<string, { frequencies: Record<string, number> }>;
-  const rawPresentation = providerPublic.presentation && typeof providerPublic.presentation === "object" ? providerPublic.presentation as Record<string, unknown> : {};
-  const positions = rawPresentation.positions && typeof rawPresentation.positions === "object" ? rawPresentation.positions as Record<string, unknown> : {};
-  const presentation = {
-    heroActor: hero,
-    dealerActor: rawPresentation.dealerActor === "ip" || rawPresentation.dealerActor === "oop" ? rawPresentation.dealerActor : initialActor,
-    positions: {
-      ip: typeof positions.ip === "string" && positions.ip.length > 0 ? positions.ip : "IP",
-      oop: typeof positions.oop === "string" && positions.oop.length > 0 ? positions.oop : "OOP",
-    },
-    holdingVisibility: "featured_hero" as const,
-    chipUnit: rawPresentation.chipUnit === "currency" ? "currency" as const : "bb" as const,
-  };
   const preflop = preflopContextSchema.parse(providerPublic.preflop ?? {
     status: "unknown",
     label: "Preflop start unavailable",
     summary: "This legacy solve did not preserve its preflop scenario.",
   });
+  const preflopPositions = positionsFromPreflop(preflop);
+  const rawPresentation = providerPublic.presentation && typeof providerPublic.presentation === "object" ? providerPublic.presentation as Record<string, unknown> : {};
+  const positions = rawPresentation.positions && typeof rawPresentation.positions === "object" ? rawPresentation.positions as Record<string, unknown> : {};
+  const resolvePosition = (laneActor: "ip" | "oop") => {
+    const raw = typeof positions[laneActor] === "string" && positions[laneActor].length > 0 ? positions[laneActor] : undefined;
+    const authored = preflopPositions[laneActor];
+    if (raw && authored && !isGenericLanePosition(raw, laneActor) && raw.toUpperCase() !== authored.toUpperCase()) {
+      throw new Error(`provider presentation position ${raw} conflicts with preflop position ${authored} for ${laneActor}`);
+    }
+    return authored ?? raw ?? laneActor.toUpperCase();
+  };
+  const resolvedPositions = { ip: resolvePosition("ip"), oop: resolvePosition("oop") };
+  const buttonActors = (["ip", "oop"] as const).filter((laneActor) => resolvedPositions[laneActor].toUpperCase() === "BTN");
+  if (buttonActors.length > 1) throw new Error("provider presentation assigns BTN to both players");
+  const rawDealer = rawPresentation.dealerActor === "ip" || rawPresentation.dealerActor === "oop" ? rawPresentation.dealerActor : undefined;
+  if (buttonActors[0] && rawDealer && rawDealer !== buttonActors[0]) {
+    throw new Error(`provider dealer actor ${rawDealer} conflicts with BTN actor ${buttonActors[0]}`);
+  }
+  const presentation = {
+    heroActor: hero,
+    dealerActor: buttonActors[0] ?? rawDealer ?? initialActor,
+    positions: resolvedPositions,
+    holdingVisibility: "featured_hero" as const,
+    chipUnit: rawPresentation.chipUnit === "currency" ? "currency" as const : "bb" as const,
+  };
   const normalized = {
     schemaVersion: 3 as const,
     sourceHash,

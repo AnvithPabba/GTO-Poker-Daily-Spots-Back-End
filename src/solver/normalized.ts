@@ -153,6 +153,22 @@ export function assertPublishableStrategyQuality(envelope: NormalizedEnvelope): 
 export function validateNormalizedEnvelope(input: unknown): NormalizedEnvelope {
   const envelope = normalizedEnvelopeSchema.parse(input);
   assertNoPrivateFields(envelope.publicPayload);
+  if (envelope.publicPayload.preflop.status === "known") {
+    const authoredPositions: Partial<Record<"ip" | "oop", string>> = {};
+    for (const actor of ["ip", "oop"] as const) {
+      const positions = [...new Set(envelope.publicPayload.preflop.actions.filter((action) => action.actor === actor).map((action) => action.position.toUpperCase()))];
+      if (positions.length > 1) throw new Error(`preflop actions assign conflicting positions to ${actor}`);
+      if (positions[0]) authoredPositions[actor] = positions[0];
+      if (positions[0] && envelope.publicPayload.presentation.positions[actor].toUpperCase() !== positions[0]) {
+        throw new Error(`presentation position for ${actor} does not match preflop actions`);
+      }
+    }
+    const buttonActors = (["ip", "oop"] as const).filter((actor) => authoredPositions[actor] === "BTN");
+    if (buttonActors.length > 1) throw new Error("preflop actions assign BTN to both players");
+    if (buttonActors[0] && envelope.publicPayload.presentation.dealerActor !== buttonActors[0]) {
+      throw new Error("presentation dealer actor does not match BTN position");
+    }
+  }
   if (envelope.candidateManifest.sourceHash !== envelope.sourceHash) throw new Error("candidate manifest source hash mismatch");
   const publicActionIds = envelope.publicPayload.legalActions.map((action) => action.id);
   if (JSON.stringify(publicActionIds) !== JSON.stringify(envelope.privateSolutionPayload.actionOrder)) throw new Error("public/private action order mismatch");

@@ -10,8 +10,12 @@ test("native provider envelope is normalized to the public/private application b
     publicPayload: {
       source: { solveHash: `sha256:${sourceHash}`, configurationHash: `sha256:${"d".repeat(64)}`, pathManifest: { steps: [{ kind: "action", solverLabel: "BET 25.000000" }] } },
       preflop: {
-        status: "known", scenarioId: "3bet_call", label: "3-bet pot", summary: "SB 3-bets and BTN calls.",
-        actions: [{ sequence: 1, actor: "oop", position: "SB", type: "three_bet", amountBb: 10, label: "SB 3-bets to 10 bb" }],
+        status: "known", scenarioId: "3bet_call", label: "3-bet pot", summary: "BTN opens, SB 3-bets, and BTN calls.",
+        actions: [
+          { sequence: 1, actor: "ip", position: "BTN", type: "open", amountBb: 2.5, label: "BTN opens to 2.5 bb" },
+          { sequence: 2, actor: "oop", position: "SB", type: "three_bet", amountBb: 10, label: "SB 3-bets to 10 bb" },
+          { sequence: 3, actor: "ip", position: "BTN", type: "call", amountBb: 10, label: "BTN calls 10 bb" },
+        ],
         rangeAssumptions: {
           ip: { presetId: "call_3bet_ip", label: "IP calling range", cells: [{ handClass: "99", inclusionBasisPoints: 7500 }] },
           oop: { presetId: "3bet_oop", label: "OOP 3-bet range", cells: [{ handClass: "AA", inclusionBasisPoints: 10000 }] },
@@ -49,6 +53,8 @@ test("native provider envelope is normalized to the public/private application b
   assert.equal(normalized.publicPayload.spotId, "provider_spot_1");
   assert.equal(normalized.schemaVersion, 3);
   assert.equal(normalized.publicPayload.preflop.status, "known");
+  assert.deepEqual(normalized.publicPayload.presentation.positions, { ip: "BTN", oop: "SB" });
+  assert.equal(normalized.publicPayload.presentation.dealerActor, "ip");
   assert.equal(normalized.publicPayload.featuredCombo, "AcKc");
   assert.ok(normalized.publicPayload.selectableCombos.some((entry) => entry.combo === "AcKc"));
   assert.equal(normalized.publicPayload.history.at(-1).kind, "decision");
@@ -66,6 +72,13 @@ test("native provider envelope is normalized to the public/private application b
   assert.equal(normalized.provenance.strategyDiversity.comboCount, 3);
   assert.equal(normalized.provenance.strategyDiversity.distinctVectorCount, 3);
   assert.equal(normalized.provenance.strategyDiversity.uniformAcrossCombos, false);
+
+  const impossibleDealer = structuredClone(input);
+  impossibleDealer.publicPayload.presentation = { heroActor: "ip", dealerActor: "oop", positions: { ip: "BTN", oop: "SB" }, holdingVisibility: "featured_hero", chipUnit: "bb" };
+  assert.throws(
+    () => normalizeProviderEnvelope(impossibleDealer, { spotId: "provider_spot_bad_dealer", publicationDate: "2026-08-20" }),
+    /dealer actor oop conflicts with BTN actor ip/,
+  );
 });
 
 test("strategy diversity is a diagnostic and flags uniform vectors without rejecting pure strategies", () => {

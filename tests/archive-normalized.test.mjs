@@ -103,4 +103,27 @@ test("normalized envelope enforces action identity, sums, and public/private bou
     ...valid,
     candidateManifest: { ...valid.candidateManifest, sourceHash: "b".repeat(64) },
   }), /source hash mismatch/);
+
+  const knownPreflop = {
+    status: "known",
+    scenarioId: "2bet_call",
+    label: "BTN opens, BB calls",
+    summary: "BTN opens and BB calls.",
+    actions: [
+      { sequence: 1, actor: "ip", position: "BTN", type: "open", amountBb: 2.5, label: "BTN opens to 2.5 bb" },
+      { sequence: 2, actor: "oop", position: "BB", type: "call", amountBb: 2.5, label: "BB calls" },
+    ],
+    rangeAssumptions: {
+      ip: { presetId: "2bet_ip", label: "BTN range", cells: [{ handClass: "AA", inclusionBasisPoints: 10_000 }] },
+      oop: { presetId: "call_oop", label: "BB range", cells: [{ handClass: "KQs", inclusionBasisPoints: 7_500 }] },
+    },
+  };
+  assert.throws(() => validateNormalizedEnvelope({
+    ...valid,
+    publicPayload: { ...valid.publicPayload, preflop: knownPreflop, presentation: { ...valid.publicPayload.presentation, dealerActor: "oop" } },
+  }), /dealer actor does not match BTN/);
+  assert.throws(() => validateNormalizedEnvelope({
+    ...valid,
+    publicPayload: { ...valid.publicPayload, preflop: knownPreflop, presentation: { ...valid.publicPayload.presentation, positions: { ip: "CO", oop: "BB" } } },
+  }), /position for ip does not match preflop actions/);
 });

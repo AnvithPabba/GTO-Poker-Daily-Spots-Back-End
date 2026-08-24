@@ -46,6 +46,17 @@ TexasSolver, and a deterministic configuration hash separate from the raw
 artifact hash. Ingestion validates this provenance and copies only the public
 preflop story and hand-class assumptions into the v3 public payload.
 
+Known preflop actions are also the authoritative source for real table
+positions. During normalization, each actor must have one consistent position
+across its authored actions. Those positions populate
+`presentation.positions`; generic legacy labels such as `IP` and `OOP` are
+replaced by the authored `BTN`, `BB`, `SB`, and so on. If a provider supplies a
+different explicit position, ingestion fails instead of publishing an
+impossible story. The dealer actor is the actor in `BTN`. A supplied dealer
+actor that conflicts with `BTN`, or a payload assigning `BTN` to both players,
+is rejected. Consequently a `BTN opens → BB calls` spot always normalizes to
+BTN/IP/dealer versus BB/OOP/first-to-act postflop.
+
 The native process must be started with the TexasSolver provider bundle as its
 working directory. TexasSolver v0.2.0 loads runtime resources relative to
 `cwd`; inheriting the separate `Solver/` directory can produce a completed log

@@ -195,7 +195,11 @@ Store public and private JSONB separately on an immutable `SpotVersion`. Never c
 - Initial table state, ordered normalized history, and exact decision state.
 - Legal actions in strategy order, each with a payload-local ID and parsed semantics.
 - Required featured concrete combo and an explicit selectable concrete-combo catalog containing it.
-- Hero actor, dealer actor, IP/OOP position labels, holding visibility, and chip unit so the client never infers presentation semantics.
+- Hero actor, dealer actor, actual poker positions, holding visibility, and chip
+  unit. For known preflop context, positions are derived from the structured
+  actions, the dealer must be the `BTN` actor, and contradictory provider
+  presentation is rejected. IP/OOP remains the actor lane rather than a
+  substitute for `BTN`, `BB`, `SB`, and other real positions.
 - Only UI-safe reach/selectability metadata that cannot expose the answer.
 
 ### Private payload
