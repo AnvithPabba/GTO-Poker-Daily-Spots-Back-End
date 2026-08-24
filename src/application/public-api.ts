@@ -60,14 +60,38 @@ function dateValue(date: string): Date { return new Date(`${date}T00:00:00.000Z`
 function dateText(value: Date): string { return value.toISOString().slice(0, 10); }
 
 export function readPublicSpot(payload: unknown): PublicSpot {
-  if (payload && typeof payload === "object" && (payload as { schemaVersion?: unknown }).schemaVersion === 2) {
-    return publicSpotSchema.parse({
+  const parsed = payload && typeof payload === "object" && (payload as { schemaVersion?: unknown }).schemaVersion === 2
+    ? publicSpotSchema.parse({
       ...(payload as Record<string, unknown>),
       schemaVersion: 3,
       preflop: { status: "unknown", label: "Preflop start unavailable", summary: "This legacy solve did not preserve its preflop scenario." },
-    });
+    })
+    : publicSpotSchema.parse(payload);
+  if (parsed.preflop.status === "unknown") return parsed;
+
+  // Some immutable early-v3 rows preserved real BTN/BB positions in their
+  // structured actions but wrote generic IP/OOP presentation and assigned the
+  // dealer to the first actor. Reconcile those rows at the read boundary from
+  // the authoritative action positions; never mutate the stored version.
+  const positions = { ...parsed.presentation.positions };
+  for (const actor of ["ip", "oop"] as const) {
+    const authored = [...new Set(parsed.preflop.actions.filter((action) => action.actor === actor).map((action) => action.position.toUpperCase()))];
+    if (authored.length > 1) throw new Error(`stored preflop actions assign conflicting positions to ${actor}`);
+    if (!authored[0]) continue;
+    const stored = positions[actor].toUpperCase();
+    if (stored !== actor.toUpperCase() && stored !== authored[0]) throw new Error(`stored presentation position for ${actor} conflicts with preflop actions`);
+    positions[actor] = authored[0];
   }
-  return publicSpotSchema.parse(payload);
+  const buttonActors = (["ip", "oop"] as const).filter((actor) => positions[actor].toUpperCase() === "BTN");
+  if (buttonActors.length > 1) throw new Error("stored spot assigns BTN to both players");
+  return publicSpotSchema.parse({
+    ...parsed,
+    presentation: {
+      ...parsed.presentation,
+      positions,
+      dealerActor: buttonActors[0] ?? parsed.presentation.dealerActor,
+    },
+  });
 }
 
 function scoreFromSimilarity(similarityBasisPoints: number) {

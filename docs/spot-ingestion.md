@@ -57,6 +57,12 @@ actor that conflicts with `BTN`, or a payload assigning `BTN` to both players,
 is rejected. Consequently a `BTN opens → BB calls` spot always normalizes to
 BTN/IP/dealer versus BB/OOP/first-to-act postflop.
 
+Previously published immutable versions are not edited in place. If an early
+v3 row retained BTN/BB in its structured actions but stored generic IP/OOP
+presentation, the public read adapter reconciles the response from those
+actions. This keeps the API internally consistent while preserving the exact
+archived database record for audit.
+
 The native process must be started with the TexasSolver provider bundle as its
 working directory. TexasSolver v0.2.0 loads runtime resources relative to
 `cwd`; inheriting the separate `Solver/` directory can produce a completed log
