@@ -240,11 +240,12 @@ is idempotent; a different payload with an existing version ID is rejected.
 The command prints the `templateId`, `jobId`, `solverRunId`, `spotId`, and
 `spotVersionId`. Keep those IDs in the authoring log.
 
-Several selected spots may originate from the same `output_result.json`.
-Because `SolverRun.outputSha256` identifies the immutable native output, later
-imports reuse that existing `SolverRun` after verifying the input, log, and
-source identities. They create new `SpotVersion` rows; they do not create a
-duplicate run or fail the unique output-checksum constraint.
+Several selected spots may originate from the same native solve. The unique
+`SolverRun.sourceHash` identifies the exact input/output pair, so those spots
+reuse one run. `outputSha256` is indexed for diagnostics but is deliberately
+not unique: different inputs can produce byte-identical output, particularly
+when a native solve collapses. Such inputs remain distinct runs instead of
+causing a false identity conflict.
 
 Raw source artifacts are append-only. If the same raw run is retried after an
 importer fix, a different import metadata observation is stored under a

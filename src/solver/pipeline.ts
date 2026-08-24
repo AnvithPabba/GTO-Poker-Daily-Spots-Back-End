@@ -41,17 +41,17 @@ export async function persistValidatedDraft(
       await tx.solverJob.update({ where: { id: input.jobId }, data: { status: SolverJobStatus.SUCCEEDED, attemptCount: input.attemptNumber, finishedAt: new Date() } });
       return { run: existingVersion.solverRun, spot: existingVersion.spot, version: existingVersion };
     }
-    const existingRun = input.outputSha256
-      ? await tx.solverRun.findUnique({ where: { outputSha256: input.outputSha256 } })
-      : null;
+    // The source hash covers the exact native input/output pair. Output bytes
+    // alone are not an identity: different solver inputs can produce the same
+    // output, especially when a native run collapses or fails semantically.
+    const existingRun = await tx.solverRun.findUnique({ where: { sourceHash: envelope.sourceHash } });
     if (existingRun) {
       const mismatches = [
         input.inputSha256 && existingRun.inputSha256 !== input.inputSha256 ? "input" : null,
-        input.logSha256 && existingRun.logSha256 !== input.logSha256 ? "log" : null,
-        envelope.sourceHash && existingRun.sourceHash !== envelope.sourceHash ? "source" : null,
+        input.outputSha256 && existingRun.outputSha256 !== input.outputSha256 ? "output" : null,
       ].filter(Boolean);
       if (mismatches.length) {
-        throw new Error(`solver output hash already exists with conflicting ${mismatches.join(", ")} identity`);
+        throw new Error(`solver source hash already exists with conflicting ${mismatches.join(", ")} identity`);
       }
     }
     const run = existingRun ?? await tx.solverRun.create({

@@ -122,7 +122,7 @@ model SolverRun {
   durationMs              Int?
   exitCode                Int?
   logTail                 String?
-  sourceHash              String?
+  sourceHash              String?         @unique
   inputSha256             String?
   outputSha256            String?
   logSha256               String?
@@ -141,9 +141,8 @@ model SolverRun {
   spotVersions  SpotVersion[]
 
   @@unique([jobId, attemptNumber])
-  @@unique([outputSha256])
   @@index([status, createdAt])
-  @@index([sourceHash])
+  @@index([outputSha256])
 }
 
 model Spot {

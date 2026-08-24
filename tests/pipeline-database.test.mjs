@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 
@@ -10,8 +11,8 @@ const databaseUrl = process.env.DATABASE_URL;
 test("validated pipeline persists split payloads idempotently and rejects conflicting versions", { skip: !databaseUrl && "DATABASE_URL is not set" }, async () => {
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   const suffix = `pipeline_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-  const ids = { template: `${suffix}_template`, job: `${suffix}_job`, retryJob: `${suffix}_retry`, siblingJob: `${suffix}_sibling_job`, spot: `${suffix}_spot`, siblingSpot: `${suffix}_sibling_spot`, version: `${suffix}_version`, siblingVersion: `${suffix}_sibling_version` };
-  const sourceHash = "e".repeat(64);
+  const ids = { template: `${suffix}_template`, job: `${suffix}_job`, retryJob: `${suffix}_retry`, siblingJob: `${suffix}_sibling_job`, collisionJob: `${suffix}_collision_job`, spot: `${suffix}_spot`, siblingSpot: `${suffix}_sibling_spot`, collisionSpot: `${suffix}_collision_spot`, version: `${suffix}_version`, siblingVersion: `${suffix}_sibling_version`, collisionVersion: `${suffix}_collision_version` };
+  const sourceHash = createHash("sha256").update(`${suffix}:source`).digest("hex");
   const publicPayload = {
     schemaVersion: 3, spotId: ids.spot, spotVersionId: ids.version, publicationDate: "2026-08-21", slotOrder: 1,
     preflop: { status: "unknown", label: "Preflop start unavailable", summary: "Legacy fixture." },
@@ -52,15 +53,32 @@ test("validated pipeline persists split payloads idempotently and rejects confli
     assert.equal(await prisma.solverRun.count({ where: { outputSha256: baseInput.outputSha256 } }), 1);
     assert.equal((await prisma.solverJob.findUniqueOrThrow({ where: { id: ids.siblingJob } })).status, "SUCCEEDED");
 
+    // Distinct input/output source identities must remain distinct even if
+    // TexasSolver happens to emit byte-identical output JSON.
+    await prisma.solverJob.create({ data: { id: ids.collisionJob, templateId: ids.template, effectiveSeed: `${suffix}:collision`, updatedAt: new Date() } });
+    const collisionEnvelope = structuredClone(envelope);
+    collisionEnvelope.sourceHash = createHash("sha256").update(`${suffix}:collision-source`).digest("hex");
+    collisionEnvelope.candidateManifest.sourceHash = collisionEnvelope.sourceHash;
+    collisionEnvelope.publicPayload.spotId = ids.collisionSpot;
+    collisionEnvelope.publicPayload.spotVersionId = ids.collisionVersion;
+    const collision = await persistValidatedDraft(
+      prisma,
+      { ...baseInput, jobId: ids.collisionJob, inputSha256: "4".repeat(64), logSha256: "5".repeat(64) },
+      collisionEnvelope,
+      { title: "Different solve with matching output bytes" },
+    );
+    assert.notEqual(collision.run.id, first.run.id);
+    assert.equal(await prisma.solverRun.count({ where: { outputSha256: baseInput.outputSha256 } }), 2);
+
     const conflict = structuredClone(envelope);
     conflict.privateSolutionPayload.byCombo.AhAs.reachWeight = 0.5;
     await assert.rejects(() => persistValidatedDraft(prisma, { ...baseInput, jobId: ids.retryJob }, conflict, { title: "Pipeline test spot" }), /already exists with different content/);
   } finally {
-    await prisma.solverJob.updateMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob] } }, data: { successfulRunId: null } });
-    await prisma.spotVersion.deleteMany({ where: { id: { in: [ids.version, ids.siblingVersion] } } });
-    await prisma.spot.deleteMany({ where: { id: { in: [ids.spot, ids.siblingSpot] } } });
-    await prisma.solverRun.deleteMany({ where: { jobId: { in: [ids.job, ids.retryJob, ids.siblingJob] } } });
-    await prisma.solverJob.deleteMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob] } } });
+    await prisma.solverJob.updateMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob, ids.collisionJob] } }, data: { successfulRunId: null } });
+    await prisma.spotVersion.deleteMany({ where: { id: { in: [ids.version, ids.siblingVersion, ids.collisionVersion] } } });
+    await prisma.spot.deleteMany({ where: { id: { in: [ids.spot, ids.siblingSpot, ids.collisionSpot] } } });
+    await prisma.solverRun.deleteMany({ where: { jobId: { in: [ids.job, ids.retryJob, ids.siblingJob, ids.collisionJob] } } });
+    await prisma.solverJob.deleteMany({ where: { id: { in: [ids.job, ids.retryJob, ids.siblingJob, ids.collisionJob] } } });
     await prisma.solverTemplate.deleteMany({ where: { id: ids.template } });
     await prisma.$disconnect();
   }

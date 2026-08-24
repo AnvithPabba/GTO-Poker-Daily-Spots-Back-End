@@ -242,8 +242,8 @@ indexes and immutable-payload trigger that Prisma cannot express alone.
 - Start/finish/duration/exit status and bounded log references.
 - Input/output SHA-256, archive input/output/log references, archive verification timestamp.
 - Normalizer/selector versions and structured failure details.
-- Unique `(jobId, attemptNumber)` and unique successful output checksum where appropriate.
-- Multiple spot nodes exported from one raw solve reuse the checksum-identified
+- Unique `(jobId, attemptNumber)` and unique input/output `sourceHash`; the output checksum alone is non-unique diagnostic data.
+- Multiple spot nodes exported from one raw solve reuse the source-hash-identified
   `SolverRun`; each node still becomes its own immutable `SpotVersion`.
 
 ### `Spot`
