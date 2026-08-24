@@ -365,7 +365,7 @@ Walk the complete serialized solver tree through explicit decision/chance/termin
 2. Verify each strategy vector length equals the action count and sums to one within tolerance.
 3. Replay the path from solver input to reconstruct board, street, actor, pot, stacks, commitments, call amount, and all-in state.
 4. Expand both configured ranges, apply board blockers, multiply reach by chosen prior action frequencies, and apply dealt-card blockers.
-5. Retain raw reach mass for eligibility/auditing and normalized reach for display/ranking.
+5. Retain raw reach mass for eligibility/auditing and normalized reach for display/ranking. Reject exact combos below the shared `1e-9` active path-reach threshold as numerical residue.
 6. Detect dump truncation separately from a legitimate terminal action.
 
 ### Hard rejection
@@ -602,7 +602,7 @@ by the Compose image.
 - [x] Dynamic action sizes are normalized data with payload-local IDs.
 - [x] Solver failures have a three-attempt exponential-backoff policy and do not block independent queued templates; native queue consumption remains the private host-worker boundary.
 - [x] Candidate selection prefers template matches, then globally ranked valid decisions, with deterministic ties.
-- [x] Invalid, truncated, blocked, zero-reach, and uninteresting nodes cannot publish.
+- [x] Invalid, truncated, blocked, zero/sub-threshold-reach, and uninteresting nodes cannot publish.
 - [x] Replenishment runs at 6:00 PM Pacific, targets seven days, and warns below three.
 - [x] Publication is singleton at Pacific midnight and supports ordered multi-spot days.
 - [x] Missing current-date content returns latest published with an explicit fallback flag and warning.

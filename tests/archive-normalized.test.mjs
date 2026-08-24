@@ -103,6 +103,13 @@ test("normalized envelope enforces action identity, sums, and public/private bou
     ...valid,
     candidateManifest: { ...valid.candidateManifest, sourceHash: "b".repeat(64) },
   }), /source hash mismatch/);
+  assert.throws(() => validateNormalizedEnvelope({
+    ...valid,
+    privateSolutionPayload: {
+      ...valid.privateSolutionPayload,
+      byCombo: { AhAs: { rawReach: 1e-12, reachWeight: 1e-12, frequencies: { a0: 2_500, a1: 7_500 } } },
+    },
+  }), /inactive reach/);
 
   const knownPreflop = {
     status: "known",

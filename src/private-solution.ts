@@ -5,7 +5,7 @@
 export type PrivateSolutionPayload = {
   schemaVersion: number;
   actionOrder: string[];
-  byCombo: Record<string, { reachWeight: number; frequencies: Record<string, number> }>;
+  byCombo: Record<string, { rawReach?: number; reachWeight: number; frequencies: Record<string, number> }>;
   reachedRanges: {
     hero: Record<string, number>;
     opponent: Record<string, number>;

@@ -20,12 +20,13 @@ import type { Clock } from "../ports.js";
 import { SystemClock } from "../ports.js";
 import { addPacificDays, pacificDate } from "../publication.js";
 import { scoreHands } from "../scoring.js";
+import { isActiveComboReach } from "../solver/reach.js";
 
 export type Visitor =
   | { kind: "guest"; identityId: string; sessionId: string }
   | { kind: "account"; accountId: string };
 
-type PrivateSolution = { actionOrder: string[]; byCombo: Record<string, { frequencies: Record<string, number> }> };
+type PrivateSolution = { actionOrder: string[]; byCombo: Record<string, { rawReach?: number; reachWeight: number; frequencies: Record<string, number> }> };
 
 /**
  * Resolve one exact two-card holding from the immutable private solution.
@@ -38,7 +39,7 @@ type PrivateSolution = { actionOrder: string[]; byCombo: Record<string, { freque
 export function resolveExactComboStrategy(
   solution: PrivateSolution,
   combo: string,
-): { frequencies: Record<string, number> } | undefined {
+): { rawReach?: number; reachWeight: number; frequencies: Record<string, number> } | undefined {
   const direct = solution.byCombo[combo];
   if (direct) return direct;
   const reversed = `${combo.slice(2)}${combo.slice(0, 2)}`;
@@ -243,9 +244,9 @@ export class PublicApplicationService {
     }
     const solution = version.privateSolutionPayload as unknown as PrivateSolution;
     const hands = request.hands.map((hand) => {
-      const frequencies = resolveExactComboStrategy(solution, hand.combo)?.frequencies;
-      if (!frequencies) throw new AppError("HAND_NOT_ALLOWED", "solution is unavailable for submitted hand", 400, { combo: hand.combo });
-      const scored = scoreHands(solution.actionOrder, hand.allocations, frequencies);
+      const exact = resolveExactComboStrategy(solution, hand.combo);
+      if (!exact || !isActiveComboReach(exact)) throw new AppError("HAND_NOT_ALLOWED", "solution is unavailable for submitted hand", 400, { combo: hand.combo });
+      const scored = scoreHands(solution.actionOrder, hand.allocations, exact.frequencies);
       return { ...scored, combo: hand.combo, similarityBasisPoints: Math.round(scored.similarity * 100) };
     }).map(({ similarity: _similarity, ...hand }) => hand);
     const similarityBasisPoints = Math.round(hands.reduce((sum, hand) => sum + hand.similarityBasisPoints, 0) / hands.length);

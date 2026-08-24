@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { NormalizedEnvelope } from "./normalized.js";
+import { ACTIVE_COMBO_MIN_REACH, effectiveComboReach } from "./reach.js";
 
 export type CandidatePolicy = {
   preferredStreet?: "flop" | "turn" | "river";
@@ -34,15 +35,17 @@ export function rankCandidates(candidates: NormalizedEnvelope[], policy: Candida
     const combo = envelope.candidateManifest.selectedCombo ?? envelope.publicPayload.featuredCombo;
     if (!combo) return [];
     const strategy = envelope.privateSolutionPayload.byCombo[combo];
-    if (!strategy || strategy.reachWeight < (policy.minimumReach ?? 0)) return [];
+    if (!strategy) return [];
+    const reach = effectiveComboReach(strategy);
+    if (reach < (policy.minimumReach ?? ACTIVE_COMBO_MIN_REACH)) return [];
     const frequencies = envelope.privateSolutionPayload.actionOrder.map((id) => strategy.frequencies[id] ?? 0);
     const mix = frequencies.filter((value) => value >= (policy.minimumMixedActionBasisPoints ?? 1)).length;
     const normalizedEntropy = entropy(frequencies);
     if (mix < 2 || normalizedEntropy < (policy.minimumEntropy ?? 0)) return [];
     const preferredMatch = (!policy.preferredStreet || envelope.publicPayload.decision.street === policy.preferredStreet)
       && (!policy.preferredActor || envelope.publicPayload.decision.actor === policy.preferredActor);
-    const score = (preferredMatch ? 1_000 : 0) + normalizedEntropy * 100 + Math.min(strategy.reachWeight, 1) * 10;
-    return [{ envelope, score, preferredMatch, entropy: normalizedEntropy, reach: strategy.reachWeight, tie: tieBreak(seed, envelope) }];
+    const score = (preferredMatch ? 1_000 : 0) + normalizedEntropy * 100 + Math.min(reach, 1) * 10;
+    return [{ envelope, score, preferredMatch, entropy: normalizedEntropy, reach, tie: tieBreak(seed, envelope) }];
   });
   if (!ranked.length) throw new Error("no valid mixed-strategy candidate");
   const preferred = ranked.some((candidate) => candidate.preferredMatch) ? ranked.filter((candidate) => candidate.preferredMatch) : ranked;

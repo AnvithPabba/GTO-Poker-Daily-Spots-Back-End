@@ -26,9 +26,9 @@ test("public API serves immutable public spots and scores one official then prac
     preflop: { status: "known", scenarioId: "2bet_call", label: "BTN opens, BB calls", summary: "Single-raised pot.", actions: [{ sequence: 1, actor: "ip", position: "BTN", type: "open", amountBb: 2.5, label: "BTN opens to 2.5 bb" }, { sequence: 2, actor: "oop", position: "BB", type: "call", amountBb: 2.5, label: "BB calls" }], rangeAssumptions: { ip: { presetId: "2bet_ip", label: "IP opening range", cells: [{ handClass: "AA", inclusionBasisPoints: 10000 }] }, oop: { presetId: "call_oop", label: "OOP calling range", cells: [{ handClass: "KQs", inclusionBasisPoints: 7500 }] } } },
     initialState: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } }, history: [{ kind: "decision", actor: "oop" }],
     decision: { board: ["Qs", "Jh", "2h"], pot: 50, stacks: { ip: 100, oop: 100 }, street: "flop", actor: "oop", allIn: { ip: false, oop: false } },
-    legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }, { combo: "AcKc", category: "suited" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
+    legalActions: [{ id: "a0", type: "check", displayLabel: "Check", solverLabel: "CHECK", isAllIn: false }, { id: "a1", type: "bet", amount: 25, displayLabel: "Bet 25", solverLabel: "BET 25.000000", isAllIn: false }], featuredCombo: "AhAs", selectableCombos: [{ combo: "AhAs", category: "pair" }, { combo: "AcKc", category: "suited" }, { combo: "KcQd", category: "offsuit" }], presentation: { heroActor: "ip", dealerActor: "ip", positions: { ip: "BTN", oop: "BB" }, holdingVisibility: "featured_hero", chipUnit: "bb" },
   };
-  const privatePayload = { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: 1, frequencies: { a0: 2_500, a1: 7_500 } }, AcKc: { reachWeight: 0.5, frequencies: { a0: 9_000, a1: 1_000 } } }, reachedRanges: { hero: { AhAs: 1, AcKc: 0.5 }, opponent: { KcKd: 1 } } };
+  const privatePayload = { schemaVersion: 1, actionOrder: ["a0", "a1"], byCombo: { AhAs: { reachWeight: 1, frequencies: { a0: 2_500, a1: 7_500 } }, AcKc: { reachWeight: 0.5, frequencies: { a0: 9_000, a1: 1_000 } }, KcQd: { rawReach: 1.5e-12, reachWeight: 1.5e-12, frequencies: { a0: 10_000, a1: 0 } } }, reachedRanges: { hero: { AhAs: 1, AcKc: 0.5, KcQd: 1.5e-12 }, opponent: { KcKd: 1 } } };
   let server;
   try {
     await prisma.solverTemplate.create({ data: { id: ids.template, familyId: suffix, version: 1, name: "API test", config: { pot: 50, effective_stack: 100, board: ["Qs", "Jh", "2h"], ranges: { ip: "AA", oop: "KK" } }, updatedAt: new Date() } });
@@ -81,6 +81,10 @@ test("public API serves immutable public spots and scores one official then prac
     assert.equal(first.headers.get("location"), `/api/v1/attempts/${firstBody.attemptId}`);
     assert.match(first.headers.get("set-cookie") ?? "", /HttpOnly/);
     const cookie = first.headers.get("set-cookie")?.split(";", 1)[0];
+    const inactiveRequest = { spotVersionId: ids.version, hands: [{ combo: "AhAs", allocations: { a0: 5_000, a1: 5_000 } }, { combo: "KcQd", allocations: { a0: 5_000, a1: 5_000 } }] };
+    const inactive = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": `${suffix}_inactive_combo`, cookie }, body: JSON.stringify(inactiveRequest) });
+    assert.equal(inactive.status, 400);
+    assert.equal((await inactive.json()).error.code, "HAND_NOT_ALLOWED");
     const retry = await fetch(`${base}/api/v1/spots/${ids.spot}/attempts`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": firstKey, cookie }, body: JSON.stringify(request) });
     assert.equal(retry.status, 201);
     assert.equal((await retry.json()).attemptId, firstBody.attemptId);

@@ -1,5 +1,6 @@
 import { preflopContextSchema } from "@poker-trainer/contracts";
 import { strategyDiversityReport, validateNormalizedEnvelope, type NormalizedEnvelope } from "./normalized.js";
+import { ACTIVE_COMBO_MIN_REACH, isActiveComboReach } from "./reach.js";
 
 type ProviderOptions = {
   spotId?: string;
@@ -86,7 +87,9 @@ function basisPointFrequencies(value: unknown, actionOrder: string[], combo: str
   return result;
 }
 
-function reachedCombos(rawRanges: unknown, actor: "ip" | "oop"): Record<string, number> {
+type ProviderReach = { rawReach?: number; normalizedReach: number };
+
+function reachedComboRecords(rawRanges: unknown, actor: "ip" | "oop"): Record<string, ProviderReach> {
   if (!rawRanges || typeof rawRanges !== "object") throw new Error("provider private ranges are missing");
   const player = (rawRanges as Record<string, unknown>)[actor];
   const combos = player && typeof player === "object" ? (player as Record<string, unknown>).combos : undefined;
@@ -95,8 +98,18 @@ function reachedCombos(rawRanges: unknown, actor: "ip" | "oop"): Record<string, 
     if (!weight || typeof weight !== "object") throw new Error(`provider reached combo ${combo} is malformed`);
     const normalized = (weight as Record<string, unknown>).normalizedReach;
     if (typeof normalized !== "number" || !Number.isFinite(normalized) || normalized < 0) throw new Error(`provider normalized reach ${actor}.${combo} is invalid`);
-    return [combo, normalized];
+    const raw = (weight as Record<string, unknown>).rawReach;
+    if (raw !== undefined && (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0)) throw new Error(`provider raw reach ${actor}.${combo} is invalid`);
+    return [combo, { normalizedReach: normalized, ...(typeof raw === "number" ? { rawReach: raw } : {}) }];
   }));
+}
+
+function reachedCombos(records: Record<string, ProviderReach>): Record<string, number> {
+  return Object.fromEntries(Object.entries(records).map(([combo, reach]) => [combo, reach.normalizedReach]));
+}
+
+function findReach(records: Record<string, ProviderReach>, combo: string): ProviderReach | undefined {
+  return comboVariants(combo).map((variant) => records[variant]).find(Boolean);
 }
 
 function providerPath(source: Record<string, unknown>): string[] {
@@ -211,15 +224,23 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
   const actionOrder = Array.isArray(strategy?.actionOrder) ? strategy.actionOrder.map(String) : legalActions.map((action) => String(action.id));
   const rawByCombo = strategy?.byCombo;
   if (!rawByCombo || typeof rawByCombo !== "object") throw new Error("provider strategy.byCombo is missing");
+  const hero = actor;
+  const opponent = hero === "ip" ? "oop" : "ip";
+  const heroReached = reachedComboRecords(privatePayload.ranges, hero);
+  const opponentReached = reachedComboRecords(privatePayload.ranges, opponent);
   const requestedFeaturedCombo = typeof providerPublic.featuredCombo === "string" ? providerPublic.featuredCombo : Object.keys(rawByCombo)[0];
   if (!requestedFeaturedCombo) throw new Error("provider featured combo is missing");
   const byCombo = Object.fromEntries(Object.entries(rawByCombo).map(([combo, raw]) => {
     if (!raw || typeof raw !== "object") throw new Error(`provider strategy for ${combo} is malformed`);
     const item = raw as Record<string, unknown>;
-    return [combo, { reachWeight: optionalNumber(item.reachWeight) ?? 0, frequencies: basisPointFrequencies(item.frequencies, actionOrder, combo) }];
+    const rangeReach = findReach(heroReached, combo);
+    const rawReach = optionalNumber(item.rawReach) ?? rangeReach?.rawReach;
+    return [combo, {
+      ...(rawReach !== undefined ? { rawReach } : {}),
+      reachWeight: optionalNumber(item.reachWeight) ?? rangeReach?.normalizedReach ?? 0,
+      frequencies: basisPointFrequencies(item.frequencies, actionOrder, combo),
+    }];
   }));
-  const hero = actor === "ip" ? "ip" : "oop";
-  const opponent = hero === "ip" ? "oop" : "ip";
   const rawSelectable = Array.isArray(providerPublic.selectableCombos)
     ? providerPublic.selectableCombos.map((entry) => typeof entry === "string" ? entry : (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).combo === "string" ? (entry as Record<string, unknown>).combo as string : ""))
     : Object.keys(byCombo);
@@ -228,12 +249,19 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
     if (!comboPattern.test(combo)) throw new Error(`provider selectable combo is invalid: ${combo}`);
     const resolved = comboVariants(combo).find((variant) => Object.hasOwn(byCombo, variant));
     if (!resolved) throw new Error(`provider selectable combo ${combo} has no exact strategy entry`);
+    const exact = byCombo[resolved]!;
+    if (!isActiveComboReach(exact)) {
+      throw new Error(
+        `provider selectable combo ${combo} is inactive `
+        + `(reach ${exact.rawReach ?? exact.reachWeight}; minimum ${ACTIVE_COMBO_MIN_REACH})`,
+      );
+    }
     return resolved;
   }).filter((combo, index, values) => values.indexOf(combo) === index);
   if (!selectableCombos.length) throw new Error("provider selectable combo catalog is empty");
   const featuredCombo = comboVariants(requestedFeaturedCombo).find((variant) => selectableCombos.includes(variant));
   if (!featuredCombo) throw new Error(`provider featured combo ${requestedFeaturedCombo} has no exact strategy entry`);
-  const selectableStrategies = Object.fromEntries(selectableCombos.map((combo) => [combo, byCombo[combo]!])) as Record<string, { frequencies: Record<string, number> }>;
+  const selectableStrategies = Object.fromEntries(selectableCombos.map((combo) => [combo, byCombo[combo]!])) as Record<string, { rawReach?: number; reachWeight: number; frequencies: Record<string, number> }>;
   const preflop = preflopContextSchema.parse(providerPublic.preflop ?? {
     status: "unknown",
     label: "Preflop start unavailable",
@@ -285,8 +313,8 @@ export function normalizeProviderEnvelope(input: unknown, options: ProviderOptio
     privateSolutionPayload: {
       schemaVersion: 1,
       actionOrder,
-      byCombo,
-      reachedRanges: { hero: reachedCombos(privatePayload.ranges, hero), opponent: reachedCombos(privatePayload.ranges, opponent) },
+      byCombo: selectableStrategies,
+      reachedRanges: { hero: reachedCombos(heroReached), opponent: reachedCombos(opponentReached) },
     },
     candidateManifest: { sourceHash, path: providerPath(source), selectedCombo: featuredCombo, fallbackUsed: false, rankingVersion: "1" },
     provenance: {

@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { publicSpotSchema, type PublicSpot } from "@poker-trainer/contracts";
 import type { PrivateSolutionPayload } from "../private-solution.js";
+import { isActiveComboReach } from "./reach.js";
 
 const basis = z.number().int().min(0).max(10_000);
 const privateComboSchema = z.object({
+  rawReach: z.number().finite().nonnegative().optional(),
   reachWeight: z.number().finite().nonnegative(),
   frequencies: z.record(basis),
 }).strict();
@@ -179,6 +181,11 @@ export function validateNormalizedEnvelope(input: unknown): NormalizedEnvelope {
     const ids = Object.keys(strategy.frequencies);
     if (ids.length !== publicActionIds.length || ids.some((id) => !publicActionIds.includes(id))) throw new Error(`strategy action mismatch for ${combo}`);
     if (Object.values(strategy.frequencies).reduce((sum, value) => sum + value, 0) !== 10_000) throw new Error(`strategy frequencies must total 10000 for ${combo}`);
+    if (!isActiveComboReach(strategy)) throw new Error(`selectable combo ${combo} has inactive reach`);
+  }
+  const privateCombos = new Set(Object.keys(envelope.privateSolutionPayload.byCombo));
+  if (privateCombos.size !== selectable.size || [...privateCombos].some((combo) => !selectable.has(combo))) {
+    throw new Error("private strategy combos must exactly match public selectable combos");
   }
   if (envelope.provenance.strategyDiversity) {
     const report = envelope.provenance.strategyDiversity;

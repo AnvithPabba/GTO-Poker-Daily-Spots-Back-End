@@ -79,6 +79,22 @@ test("native provider envelope is normalized to the public/private application b
     () => normalizeProviderEnvelope(impossibleDealer, { spotId: "provider_spot_bad_dealer", publicationDate: "2026-08-20" }),
     /dealer actor oop conflicts with BTN actor ip/,
   );
+
+  const numericalResidue = structuredClone(input);
+  numericalResidue.publicPayload.selectableCombos.push("KcQd");
+  numericalResidue.privateSolutionPayload.ranges.ip.combos.KcQd = {
+    rawReach: 1.5e-12,
+    normalizedReach: 1.5e-12,
+  };
+  numericalResidue.privateSolutionPayload.strategy.byCombo.KcQd = {
+    rawReach: 1.5e-12,
+    reachWeight: 1.5e-12,
+    frequencies: { a0: 1, a1: 0, a2: 0 },
+  };
+  assert.throws(
+    () => normalizeProviderEnvelope(numericalResidue, { spotId: "provider_spot_residue", publicationDate: "2026-08-20" }),
+    /selectable combo KcQd is inactive/,
+  );
 });
 
 test("strategy diversity is a diagnostic and flags uniform vectors without rejecting pure strategies", () => {

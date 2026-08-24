@@ -40,6 +40,12 @@ directory is:
 frequencies and reached ranges and must never be copied to the frontend or
 returned by a public API.
 
+Selectable hands must pass the shared active-reach gate. The provider uses raw
+path reach when available and otherwise falls back to normalized reach for
+legacy rows; values below `1e-9` are solver residue, not training hands.
+Normalization rejects such envelopes, and attempt submission repeats the
+check so an older malformed database row cannot be scored.
+
 The run root also contains `configuration.json`, which records the canonical
 resolved hand config, selected range scenario, literal IP/OOP ranges passed to
 TexasSolver, and a deterministic configuration hash separate from the raw
