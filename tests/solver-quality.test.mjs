@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -8,6 +8,33 @@ import { assessSolverLog, parseSolverLog, SolverQualityError } from "../dist/sol
 import { ingestSpot } from "../dist/solver/ingest.js";
 
 const checkpoint = (iteration, total) => `Iter: ${iteration}\nTotal exploitability ${total} precent\n`;
+
+async function createRejectedFixture(prefix, { includeOutput = true } = {}) {
+  const fixture = await mkdtemp(join(tmpdir(), prefix));
+  const configurationHash = "a".repeat(64);
+  const preflop = {
+    status: "unknown",
+    label: "Preflop start unavailable",
+    summary: "Synthetic ingestion quality fixture.",
+  };
+  const provenance = {
+    schemaVersion: 1,
+    configurationHash,
+    preflop,
+    resolvedRanges: { ip: "AA", oop: "KK" },
+    authoredConfig: { solver: { minimum_iterations: 100, accuracy_percent: 0.1 } },
+  };
+  const envelope = { publicPayload: { source: { configurationHash }, preflop } };
+
+  await Promise.all([
+    writeFile(join(fixture, "input.txt"), "set_range_ip AA\nset_range_oop KK\n", "utf8"),
+    writeFile(join(fixture, "solver.log"), checkpoint(11, "0.012891086"), "utf8"),
+    writeFile(join(fixture, "configuration.json"), JSON.stringify(provenance), "utf8"),
+    writeFile(join(fixture, "provider-envelope.json"), JSON.stringify(envelope), "utf8"),
+    ...(includeOutput ? [writeFile(join(fixture, "output_result.json"), "{}", "utf8")] : []),
+  ]);
+  return fixture;
+}
 
 test("solver quality accepts a converged checkpoint after the minimum budget", () => {
   const report = assessSolverLog(checkpoint(201, "0.05"), { minimumIterations: 100, accuracyPercent: 0.1 });
@@ -26,16 +53,14 @@ test("solver quality rejects the premature eleven-iteration run", () => {
 });
 
 test("ingestion archives a rejected raw run without creating database rows", async () => {
-  // Arrange: reuse the checked-in premature solve bundle; the fake Prisma
-  // object is intentionally never reached because quality is checked first.
-  const source = join(process.cwd(), "../../SolverOutputs/e24e3bdb773a472092f5bdf4f4da11448cbef210a1ca7106a4664644aaf981e3");
-  const fixture = await mkdtemp(join(tmpdir(), "poker-rejected-solve-"));
-  for (const name of ["input.txt", "output_result.json", "solver.log", "configuration.json"]) await copyFile(join(source, name), join(fixture, name));
+  // Arrange: this synthetic bundle reaches the log-quality gate without
+  // depending on the private Solver repository or a developer filesystem.
+  const fixture = await createRejectedFixture("poker-rejected-solve-");
   const archiveRoot = await mkdtemp(join(tmpdir(), "poker-rejected-archive-"));
 
   // Act / Assert
   await assert.rejects(() => ingestSpot({}, {
-    envelopePath: join(source, "spots/correct-2bet-flop-decision--3b6938783b8d/provider-envelope.json"),
+    envelopePath: join(fixture, "provider-envelope.json"),
     inputPath: join(fixture, "input.txt"),
     outputPath: join(fixture, "output_result.json"),
     logPath: join(fixture, "solver.log"),
@@ -53,15 +78,13 @@ test("ingestion archives a rejected raw run without creating database rows", asy
 
 test("ingestion rejects malformed solver JSON after archiving the raw bundle", async () => {
   // Arrange
-  const source = join(process.cwd(), "../../SolverOutputs/e24e3bdb773a472092f5bdf4f4da11448cbef210a1ca7106a4664644aaf981e3");
-  const fixture = await mkdtemp(join(tmpdir(), "poker-malformed-solve-"));
-  for (const name of ["input.txt", "output_result.json", "solver.log", "configuration.json"]) await copyFile(join(source, name), join(fixture, name));
+  const fixture = await createRejectedFixture("poker-malformed-solve-");
   await writeFile(join(fixture, "output_result.json"), "{not-json", "utf8");
   const archiveRoot = await mkdtemp(join(tmpdir(), "poker-malformed-archive-"));
 
   // Act / Assert
   await assert.rejects(() => ingestSpot({}, {
-    envelopePath: join(source, "spots/correct-2bet-flop-decision--3b6938783b8d/provider-envelope.json"),
+    envelopePath: join(fixture, "provider-envelope.json"),
     inputPath: join(fixture, "input.txt"),
     outputPath: join(fixture, "output_result.json"),
     logPath: join(fixture, "solver.log"),
@@ -79,14 +102,12 @@ test("ingestion rejects malformed solver JSON after archiving the raw bundle", a
 
 test("ingestion archives missing solver artifacts as a rejected run", async () => {
   // Arrange
-  const source = join(process.cwd(), "../../SolverOutputs/e24e3bdb773a472092f5bdf4f4da11448cbef210a1ca7106a4664644aaf981e3");
-  const fixture = await mkdtemp(join(tmpdir(), "poker-missing-solve-"));
-  for (const name of ["input.txt", "solver.log", "configuration.json"]) await copyFile(join(source, name), join(fixture, name));
+  const fixture = await createRejectedFixture("poker-missing-solve-", { includeOutput: false });
   const archiveRoot = await mkdtemp(join(tmpdir(), "poker-missing-archive-"));
 
   // Act / Assert
   await assert.rejects(() => ingestSpot({}, {
-    envelopePath: join(source, "spots/correct-2bet-flop-decision--3b6938783b8d/provider-envelope.json"),
+    envelopePath: join(fixture, "provider-envelope.json"),
     inputPath: join(fixture, "input.txt"),
     outputPath: join(fixture, "output_result.json"),
     logPath: join(fixture, "solver.log"),
